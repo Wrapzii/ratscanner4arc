@@ -20,7 +20,7 @@ Rat Scanner is an open source tool adapted for [Arc Raiders][arc-raiders].
 
 This is a modified version of the original Rat Scanner that was designed for [Escape from Tarkov][escape-from-tarkov].
 
-Please consider [supporting](#Support-the-project) the project to help finance the backend server as well as the [API][tarkov-dev].
+**Note:** This version uses **hardcoded item data** from [MetaForge][metaforge-items], as Arc Raiders does not have a live market or API. No live API calls are made.
 
 [Tutorial / Demo Video][demo-video] - [Frequently asked Questions][faq-page]
 
@@ -34,16 +34,16 @@ While the game developers do not support nor are affiliated with this project, t
 
 ## What it does
 
-Rat Scanner allows you to scan items in the game and provides you with data about items (average price, value per slot, and **recycle recommendations**).
+Rat Scanner allows you to scan items in the game and provides you with data about items (static item values, value per slot, and **recycle recommendations**).
 
-The information is taken from a [third-party API][tarkov-dev] which takes the data directly from the game.
+**Note:** Unlike the original Tarkov version, Arc Raiders does not have a live market or flea market. All item values are **hardcoded** based on data from [MetaForge][metaforge-items]. There are no live API calls.
 
-### New Arc Raiders Features
+### Arc Raiders Features
 - **Recycle Recommendations**: Automatically suggests whether to recycle or keep an item based on:
   - Item value per inventory slot
-  - Task/quest requirements
-  - Hideout/base building requirements
-  - Market and trader prices
+  - Quest requirements
+  - Base building requirements
+  - Static item values (no market prices)
 
 <br/>
 
@@ -139,12 +139,13 @@ Please read `CONTRIBUTING.md` before contributing.
 
 ## Support the project
 
-This will help to finance the backend server as well as the [API][tarkov-dev] which provides the backend with data.
+This will help to finance the ongoing development of the Arc Raiders adaptation.
 
 [![Patreon](https://img.shields.io/badge/dynamic/json?color=%23e85b46&label=Patreon&query=data.attributes.patron_count&suffix=%20patrons&url=https%3A%2F%2Fwww.patreon.com%2Fapi%2Fcampaigns%2F4117180&style=for-the-badge&logo=patreon)](https://patreon.com/RatScanner)
 [![PayPal](https://img.shields.io/static/v1?&label=PayPal&message=Donate&color=0079C1&style=for-the-badge&logo=paypal)](https://paypal.me/MoritzScheve)
 
 [arc-raiders]: https://arcraiders.com/
+[metaforge-items]: https://metaforge.app/arc-raiders/database/items/page/1
 [escape-from-tarkov]: https://www.escapefromtarkov.com/
 [tarkov-dev]: https://tarkov.dev/
 [eft-icons-repo]: https://github.com/RatScanner/EfTIcons
