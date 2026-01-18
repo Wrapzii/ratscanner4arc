@@ -65,6 +65,15 @@
                                     @MenuVM.HideoutRemaining <MudIcon Icon="@Icons.Material.Filled.House" Size="Size.Small" Class="ml-1" />
                                 </div>
                             }
+                            @{
+                                var recycleRec = item.GetRecycleRecommendation();
+                                if (recycleRec.shouldRecycle)
+                                {
+                                    <div class="d-flex align-center stroke" style="color: #ff9800;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Recycling" Size="Size.Small" Class="mr-1" /> RECYCLE
+                                    </div>
+                                }
+                            }
                         </div>
                     </div>
                 </div>
@@ -97,6 +106,13 @@
                     @if (MenuVM.HideoutRemaining > 0)
                     {
                         <MudIcon Icon="@Icons.Material.Filled.House" Size="Size.Small" Class="ml-1" />
+                    }
+                    @{
+                        var recycleRec = item.GetRecycleRecommendation();
+                        if (recycleRec.shouldRecycle)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Recycling" Size="Size.Small" Class="ml-1" style="color: #ff9800;" />
+                        }
                     }
                 </div>
             }

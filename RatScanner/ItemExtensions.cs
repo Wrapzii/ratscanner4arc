@@ -127,4 +127,47 @@ public static class ItemExtensions {
 		if (item.Properties is not ItemPropertiesAmmo ammo) return Enumerable.Empty<Item>();
 		return TarkovDevAPI.GetItems().Where(i => i.Properties is ItemPropertiesAmmo a && ammo.Caliber == a.Caliber);
 	}
+
+	/// <summary>
+	/// Determines if an item should be recycled based on value and task/hideout requirements
+	/// </summary>
+	/// <param name="item">The item to evaluate</param>
+	/// <returns>Tuple indicating if item should be recycled and the reason</returns>
+	public static (bool shouldRecycle, string reason) GetRecycleRecommendation(this Item item) {
+		// Check if item is needed for tasks
+		int taskNeeded = item.GetTaskRemaining().count;
+		if (taskNeeded > 0) {
+			return (false, $"Needed for {taskNeeded} task(s)");
+		}
+
+		// Check if item is needed for hideout
+		int hideoutNeeded = item.GetHideoutRemaining();
+		if (hideoutNeeded > 0) {
+			return (false, $"Needed for hideout ({hideoutNeeded})");
+		}
+
+		// Get price per slot to determine value efficiency
+		int pricePerSlot = item.GetAvg24hMarketPricePerSlot();
+		int marketPrice = item.Avg24HPrice ?? 0;
+		int traderPrice = item.GetBestTraderOffer()?.PriceRub ?? 0;
+
+		// Low value threshold - items worth less per slot should be recycled
+		const int lowValueThreshold = 5000;
+		if (pricePerSlot < lowValueThreshold) {
+			return (true, "Low value per slot");
+		}
+
+		// If trader offers better price and it's decent value, keep to sell
+		if (traderPrice > marketPrice && traderPrice > 10000) {
+			return (false, "Good trader value");
+		}
+
+		// If market price is good, keep to sell
+		if (marketPrice > 10000) {
+			return (false, "Good market value");
+		}
+
+		// Default to recycle if no clear value
+		return (true, "Low overall value");
+	}
 }

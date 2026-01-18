@@ -14,9 +14,11 @@
 </a>
 </div>
 
-# Rat Scanner
+# Rat Scanner for Arc Raiders
 
-Rat Scanner is a open source tool for [Escape from Tarkov][escape-from-tarkov].
+Rat Scanner is an open source tool adapted for [Arc Raiders][arc-raiders].
+
+This is a modified version of the original Rat Scanner that was designed for [Escape from Tarkov][escape-from-tarkov].
 
 Please consider [supporting](#Support-the-project) the project to help finance the backend server as well as the [API][tarkov-dev].
 
@@ -26,15 +28,22 @@ Please consider [supporting](#Support-the-project) the project to help finance t
 
 ## Can I get banned for using Rat Scanner?
 
-While Battlestate Games does not support nor is affiliated with this project, it has existed over 5 years with over 1.000 players using it every day in their games. So far there has not been a single instance in which RatScanner was proven to have caused any ban.
+While the game developers do not support nor are affiliated with this project, the original version has existed over 5 years with over 1,000 players using it every day in their games. So far there has not been a single instance in which RatScanner was proven to have caused any ban. However, use at your own risk.
 
 <br/>
 
 ## What it does
 
-Rat Scanner allows you to scan items in the game and provides you with data about items (average price, value per slot, ...).
+Rat Scanner allows you to scan items in the game and provides you with data about items (average price, value per slot, and **recycle recommendations**).
 
 The information is taken from a [third-party API][tarkov-dev] which takes the data directly from the game.
+
+### New Arc Raiders Features
+- **Recycle Recommendations**: Automatically suggests whether to recycle or keep an item based on:
+  - Item value per inventory slot
+  - Task/quest requirements
+  - Hideout/base building requirements
+  - Market and trader prices
 
 <br/>
 
@@ -135,6 +144,7 @@ This will help to finance the backend server as well as the [API][tarkov-dev] wh
 [![Patreon](https://img.shields.io/badge/dynamic/json?color=%23e85b46&label=Patreon&query=data.attributes.patron_count&suffix=%20patrons&url=https%3A%2F%2Fwww.patreon.com%2Fapi%2Fcampaigns%2F4117180&style=for-the-badge&logo=patreon)](https://patreon.com/RatScanner)
 [![PayPal](https://img.shields.io/static/v1?&label=PayPal&message=Donate&color=0079C1&style=for-the-badge&logo=paypal)](https://paypal.me/MoritzScheve)
 
+[arc-raiders]: https://arcraiders.com/
 [escape-from-tarkov]: https://www.escapefromtarkov.com/
 [tarkov-dev]: https://tarkov.dev/
 [eft-icons-repo]: https://github.com/RatScanner/EfTIcons
