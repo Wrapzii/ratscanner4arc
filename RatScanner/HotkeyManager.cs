@@ -14,6 +14,7 @@ internal class HotkeyManager {
 
 	internal ActiveHotkey NameScanHotkey;
 	internal ActiveHotkey IconScanHotkey;
+	internal ActiveHotkey TooltipScanHotkey;
 	internal ActiveHotkey OpenInteractableOverlayHotkey;
 	internal ActiveHotkey CloseInteractableOverlayHotkey;
 
@@ -36,6 +37,7 @@ internal class HotkeyManager {
 	[MemberNotNull(
 		nameof(NameScanHotkey),
 		nameof(IconScanHotkey),
+		nameof(TooltipScanHotkey),
 		nameof(OpenInteractableOverlayHotkey),
 		nameof(CloseInteractableOverlayHotkey))
 	]
@@ -43,9 +45,10 @@ internal class HotkeyManager {
 		// Unregister hotkeys to prevent multiple listeners for the same hotkey
 		UnregisterHotkeys();
 
-		Hotkey nameScanHotkey = new(null, new[] { MouseButton.Left });
-		NameScanHotkey = new ActiveHotkey(nameScanHotkey, OnNameScanHotkey, ref NameScan.Enable);
+		// Disable plain hover/click tooltip scan; use configured TooltipScan hotkey instead (Alt + Click)
+		NameScanHotkey = new ActiveHotkey(new Hotkey(), OnTooltipScanHotkey, ref TooltipScan.Enable);
 		IconScanHotkey = new ActiveHotkey(IconScan.Hotkey, OnIconScanHotkey, ref IconScan.Enable);
+		TooltipScanHotkey = new ActiveHotkey(TooltipScan.Hotkey, OnTooltipScanHotkey, ref TooltipScan.Enable);
 		OpenInteractableOverlayHotkey = new ActiveHotkey(OverlayC.Search.Hotkey, OnOpenInteractableOverlayHotkey, ref OverlayC.Search.Enable);
 		CloseInteractableOverlayHotkey = new ActiveHotkey(new Hotkey(new[] { Key.Escape }), OnCloseInteractableOverlayHotkey);
 	}
@@ -56,6 +59,7 @@ internal class HotkeyManager {
 	internal void UnregisterHotkeys() {
 		NameScanHotkey?.Dispose();
 		IconScanHotkey?.Dispose();
+		TooltipScanHotkey?.Dispose();
 		OpenInteractableOverlayHotkey?.Dispose();
 	}
 
@@ -77,6 +81,8 @@ internal class HotkeyManager {
 
 	private void OnNameScanHotkey(object? sender, KeyUpEventArgs e) {
 		Wrap(() => {
+			// Avoid double-trigger when modifier hotkeys are used (e.g., Alt+Left)
+			if (Keyboard.IsKeyDown(Key.LeftAlt) || Keyboard.IsKeyDown(Key.RightAlt)) return;
 			RatScannerMain.Instance.NameScan(UserActivityHelper.GetMousePosition());
 			if (_last_mouse_click + 500 < DateTimeOffset.Now.ToUnixTimeMilliseconds() && NameScan.EnableAuto) {
 				Thread.Sleep(200);  // wait for double click and ui
@@ -88,6 +94,10 @@ internal class HotkeyManager {
 
 	private void OnIconScanHotkey(object? sender, KeyUpEventArgs e) {
 		Wrap(() => RatScannerMain.Instance.IconScan(UserActivityHelper.GetMousePosition()));
+	}
+
+	private void OnTooltipScanHotkey(object? sender, KeyUpEventArgs e) {
+		Wrap(() => RatScannerMain.Instance.TooltipScan(UserActivityHelper.GetMousePosition()));
 	}
 
 	private void OnOpenInteractableOverlayHotkey(object? sender, KeyUpEventArgs e) {

@@ -10,7 +10,7 @@ public class ItemQueue : IEnumerable<ItemScan> {
 	public event EventHandler Changed;
 
 	protected virtual void OnChanged() {
-		while (queue.Count > 1 && !(DateTimeOffset.Now.ToUnixTimeMilliseconds() > queue.First().DissapearAt)) {
+		while (queue.Count > 1 && DateTimeOffset.Now.ToUnixTimeMilliseconds() > queue.First().DissapearAt) {
 			if (!queue.TryDequeue(out _)) break;
 		}
 		Changed?.Invoke(this, EventArgs.Empty);

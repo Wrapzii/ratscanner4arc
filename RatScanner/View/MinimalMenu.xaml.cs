@@ -26,13 +26,11 @@ public partial class MinimalMenu : UserControl, ISwitchable {
 		const Visibility c = Visibility.Collapsed;
 
 		NameDisplay.Visibility = RCMinUi.ShowName ? v : c;
-		AvgDayPriceDisplay.Visibility = RCMinUi.ShowAvgDayPrice ? v : c;
-		PricePerSlotDisplay.Visibility = RCMinUi.ShowPricePerSlot ? v : c;
-		TraderPriceDisplay.Visibility = RCMinUi.ShowTraderPrice ? v : c;
-		KappaDisplay.Visibility = RCMinUi.ShowKappa ? v : c;
-		TrackingDisplay.Visibility = RCMinUi.ShowQuestHideoutTracker ? v : c;
-		TeamTrackingDisplay.Visibility = RCMinUi.ShowQuestHideoutTeamTracker ? v : c;
-		UpdatedDisplay.Visibility = RCMinUi.ShowUpdated ? v : c;
+		ValueDisplay.Visibility = RCMinUi.ShowValue ? v : c;
+		ValuePerSlotDisplay.Visibility = RCMinUi.ShowValuePerSlot ? v : c;
+		RarityDisplay.Visibility = RCMinUi.ShowRarity ? v : c;
+		WeightDisplay.Visibility = RCMinUi.ShowWeight ? v : c;
+		RecycleDisplay.Visibility = RCMinUi.ShowRecycle ? v : c;
 	}
 
 	private void OnMouseDown(object? sender, MouseButtonEventArgs e) {

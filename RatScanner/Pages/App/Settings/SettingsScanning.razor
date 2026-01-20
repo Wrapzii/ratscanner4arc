@@ -51,6 +51,28 @@
                 </MudStack>
             </MudPaper>
         </MudItem>
+        <MudItem xs="12">
+            <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
+                <MudStack Spacing="0" Class="pa-0 ma-0">
+                    <MudCheckBox @bind-Checked="@SettingsVM.EnableTooltipScan" Label="Enable Tooltip Scan (OCR)" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudText Typo="Typo.caption" Class="px-2">Scans item tooltips using OCR when you hover over items</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12">
+            <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
+                <MudStack Spacing="0" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Row="true">
+                    <MudItem>
+                        <MudText>
+                            Tooltip Scan Hotkey
+                        </MudText>
+                    </MudItem>
+                    <MudItem>
+                        <HotkeySelector Hotkey="@SettingsVM.TooltipScanHotkey"></HotkeySelector>
+                    </MudItem>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
     </MudGrid>
 </div>
 

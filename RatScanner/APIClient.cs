@@ -1,4 +1,5 @@
-﻿using RatScanner.FetchModels.TarkovTracker;
+﻿#if false
+using RatScanner.FetchModels.TarkovTracker;
 using System.Net;
 using System.Net.Http;
 
@@ -31,3 +32,4 @@ internal static class APIClient {
 		return contentTask.Result;
 	}
 }
+#endif

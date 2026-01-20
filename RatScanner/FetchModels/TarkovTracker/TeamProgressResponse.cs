@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿#if false
+using Newtonsoft.Json;
 using System.Collections.Generic;
 
 namespace RatScanner.FetchModels.TarkovTracker;
@@ -18,3 +19,4 @@ public class TeamProgressResponse {
 		public List<string> HiddenTeammates { get; set; } = new();
 	}
 }
+#endif

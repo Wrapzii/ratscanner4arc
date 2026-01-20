@@ -6,7 +6,7 @@ public abstract class ItemScan
 
 // Base Scan Data
 {
-	public TarkovDev.GraphQL.Item Item { get; set; } = new TarkovDev.GraphQL.Item();
+	public ArcRaidersData.ArcItem Item { get; set; } = new ArcRaidersData.ArcItem();
 
 	public float Confidence { get; set; } = 0;
 

@@ -1,6 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
-using RatScanner.TarkovDev.GraphQL;
-using RatStash;
+﻿using RatStash;
 using System;
 using System.Diagnostics;
 using System.Drawing;
@@ -34,14 +32,8 @@ internal static class RatConfig {
 		internal static string StaticIcon = Path.Combine(Data, "icons");
 		internal static string Locales = Path.Combine(Data, "locales");
 
-		private const string EftTempDir = "Battlestate Games\\EscapeFromTarkov\\";
-		private static readonly string EftTemp = Path.Combine(Path.GetTempPath(), EftTempDir);
 		private static readonly string TempDir = Path.Combine(Path.GetTempPath(), "RatScanner");
 		internal static readonly string CacheDir = Path.Combine(TempDir, "Cache");
-		internal static string DynamicIcon = Path.Combine(EftTemp, "Icon Cache");
-		internal static string StaticCorrelation = Path.Combine(StaticIcon, "correlation.json");
-		internal static string DynamicCorrelation = Path.Combine(DynamicIcon, "index.json");
-		internal static string ItemData = Path.Combine(Data, "items.json");
 		internal static string TrainedData = Path.Combine(Data, "traineddata");
 		internal static string UnknownIcon = Path.Combine(Data, "unknown.png");
 		internal static string ConfigFile = Path.Combine(Base, "config.cfg");
@@ -67,8 +59,17 @@ internal static class RatConfig {
 		internal static bool ScanRotatedIcons = true;
 		internal static int ScanWidth => (int)(GameScale * 896);
 		internal static int ScanHeight => (int)(GameScale * 896);
+		internal static int SelectionScanSize => (int)(GameScale * 700);
 		internal static Hotkey Hotkey = new(new[] { Key.LeftShift }.ToList(), new[] { MouseButton.Left });
 		internal static bool UseCachedIcons = true;
+	}
+
+	// Tooltip Scan options (for detecting Arc Raiders item tooltips)
+	internal static class TooltipScan {
+		internal static bool Enable = true;
+		internal static int ScanWidth => (int)(GameScale * 500);  // Tooltips are ~400px wide
+		internal static int ScanHeight => (int)(GameScale * 600); // Tooltips can be tall
+		internal static Hotkey Hotkey = new(new[] { Key.LeftAlt }.ToList(), new[] { MouseButton.Left });
 	}
 
 	// ToolTip options
@@ -80,38 +81,12 @@ internal static class RatConfig {
 	// Minimal UI
 	internal static class MinimalUi {
 		internal static bool ShowName = true;
-		internal static bool ShowAvgDayPrice = true;
-		internal static bool ShowPricePerSlot = true;
-		internal static bool ShowTraderPrice = true;
-		internal static bool ShowUpdated = false;
-		internal static bool ShowKappa = false;
-		internal static bool ShowQuestHideoutTracker = true;
-		internal static bool ShowQuestHideoutTeamTracker = false;
+		internal static bool ShowValue = true;
+		internal static bool ShowValuePerSlot = true;
+		internal static bool ShowRarity = true;
+		internal static bool ShowWeight = false;
+		internal static bool ShowRecycle = true;
 		internal static int Opacity = 0;
-	}
-
-	// Progress Tracking options
-	internal static class Tracking {
-		internal static bool ShowNonFIRNeeds = true;
-
-		internal static bool ShowKappaNeeds = false;
-
-		internal static class TarkovTracker {
-			internal static TarkovTrackerBackend Backend = TarkovTrackerBackend.TarkovTrackerIO;
-			internal static string Endpoint => Backend == TarkovTrackerBackend.TarkovTrackerIO 
-				? "https://tarkovtracker.io/api/v2" 
-				: "https://tarkovtracker.org/api/v2";
-			internal static bool Enable => Token.Length > 0;
-
-			internal static string Token = "";
-			internal static bool ShowTeam = true;
-			internal static int RefreshTime = 5 * 60 * 1000; // 5 minutes
-		}
-	}
-
-	public enum TarkovTrackerBackend {
-		TarkovTrackerIO,
-		TarkovTrackerORG,
 	}
 
 	// Overlay options
@@ -138,13 +113,8 @@ internal static class RatConfig {
 #else
 	internal static bool LogDebug = false;
 #endif
-	internal static GameMode GameMode = GameMode.Regular;
 	internal static bool MinimizeToTray = false;
 	internal static bool AlwaysOnTop = true;
-	internal static int SuperShortTTL = 30; // 30 seconds
-	internal static int ShortTTL = 60 * 5; // 5 minutes
-	internal static int MediumTTL = 60 * 60 * 1; // 1 hour
-	internal static int LongTTL = 60 * 60 * 12; // 12 hours
 	private static int ConfigVersion => 2;
 
 	internal static int ScreenWidth = 1920;
@@ -195,29 +165,22 @@ internal static class RatConfig {
 		IconScan.Hotkey = config.ReadHotkey(nameof(IconScan.Hotkey), IconScan.Hotkey);
 		IconScan.UseCachedIcons = config.ReadBool(nameof(IconScan.UseCachedIcons), IconScan.UseCachedIcons);
 
+		config.Section = nameof(TooltipScan);
+		TooltipScan.Enable = config.ReadBool(nameof(TooltipScan.Enable), TooltipScan.Enable);
+		TooltipScan.Hotkey = config.ReadHotkey(nameof(TooltipScan.Hotkey), TooltipScan.Hotkey);
+
 		config.Section = nameof(ToolTip);
 		ToolTip.Duration = config.ReadInt(nameof(ToolTip.Duration), ToolTip.Duration);
 		ToolTip.DigitGroupingSymbol = config.ReadString(nameof(ToolTip.DigitGroupingSymbol), ToolTip.DigitGroupingSymbol);
 
 		config.Section = nameof(MinimalUi);
 		MinimalUi.ShowName = config.ReadBool(nameof(MinimalUi.ShowName), MinimalUi.ShowName);
-		MinimalUi.ShowAvgDayPrice = config.ReadBool(nameof(MinimalUi.ShowAvgDayPrice), MinimalUi.ShowAvgDayPrice);
-		MinimalUi.ShowPricePerSlot = config.ReadBool(nameof(MinimalUi.ShowPricePerSlot), MinimalUi.ShowPricePerSlot);
-		MinimalUi.ShowTraderPrice = config.ReadBool(nameof(MinimalUi.ShowTraderPrice), MinimalUi.ShowTraderPrice);
-		MinimalUi.ShowUpdated = config.ReadBool(nameof(MinimalUi.ShowUpdated), MinimalUi.ShowUpdated);
-		MinimalUi.ShowKappa = config.ReadBool(nameof(MinimalUi.ShowKappa), MinimalUi.ShowKappa);
-		MinimalUi.ShowQuestHideoutTracker = config.ReadBool(nameof(MinimalUi.ShowQuestHideoutTracker), MinimalUi.ShowQuestHideoutTracker);
-		MinimalUi.ShowQuestHideoutTeamTracker = config.ReadBool(nameof(MinimalUi.ShowQuestHideoutTeamTracker), MinimalUi.ShowQuestHideoutTeamTracker);
+		MinimalUi.ShowValue = config.ReadBool(nameof(MinimalUi.ShowValue), MinimalUi.ShowValue);
+		MinimalUi.ShowValuePerSlot = config.ReadBool(nameof(MinimalUi.ShowValuePerSlot), MinimalUi.ShowValuePerSlot);
+		MinimalUi.ShowRarity = config.ReadBool(nameof(MinimalUi.ShowRarity), MinimalUi.ShowRarity);
+		MinimalUi.ShowWeight = config.ReadBool(nameof(MinimalUi.ShowWeight), MinimalUi.ShowWeight);
+		MinimalUi.ShowRecycle = config.ReadBool(nameof(MinimalUi.ShowRecycle), MinimalUi.ShowRecycle);
 		MinimalUi.Opacity = config.ReadInt(nameof(MinimalUi.Opacity), MinimalUi.Opacity);
-
-		config.Section = nameof(Tracking);
-		Tracking.ShowNonFIRNeeds = config.ReadBool(nameof(Tracking.ShowNonFIRNeeds), Tracking.ShowNonFIRNeeds);
-		Tracking.ShowKappaNeeds = config.ReadBool(nameof(Tracking.ShowKappaNeeds), Tracking.ShowKappaNeeds);
-
-		config.Section = nameof(Tracking.TarkovTracker);
-		Tracking.TarkovTracker.Backend = (TarkovTrackerBackend)config.ReadInt(nameof(Tracking.TarkovTracker.Backend), (int)Tracking.TarkovTracker.Backend);
-		Tracking.TarkovTracker.Token = config.ReadSecureString(nameof(Tracking.TarkovTracker.Token), Tracking.TarkovTracker.Token);
-		Tracking.TarkovTracker.ShowTeam = config.ReadBool(nameof(Tracking.TarkovTracker.ShowTeam), Tracking.TarkovTracker.ShowTeam);
 
 		config.Section = nameof(Overlay);
 
@@ -237,7 +200,6 @@ internal static class RatConfig {
 			ScreenScale = config.ReadFloat(nameof(ScreenScale), ScreenScale);
 		}
 
-		GameMode = (GameMode)config.ReadInt(nameof(GameMode), (int)GameMode);
 		MinimizeToTray = config.ReadBool(nameof(MinimizeToTray), MinimizeToTray);
 		AlwaysOnTop = config.ReadBool(nameof(AlwaysOnTop), AlwaysOnTop);
 		LogDebug = config.ReadBool(nameof(LogDebug), LogDebug);
@@ -261,29 +223,22 @@ internal static class RatConfig {
 		config.WriteHotkey(nameof(IconScan.Hotkey), IconScan.Hotkey);
 		config.WriteBool(nameof(IconScan.UseCachedIcons), IconScan.UseCachedIcons);
 
+		config.Section = nameof(TooltipScan);
+		config.WriteBool(nameof(TooltipScan.Enable), TooltipScan.Enable);
+		config.WriteHotkey(nameof(TooltipScan.Hotkey), TooltipScan.Hotkey);
+
 		config.Section = nameof(ToolTip);
 		config.WriteInt(nameof(ToolTip.Duration), ToolTip.Duration);
 		config.WriteString(nameof(ToolTip.DigitGroupingSymbol), ToolTip.DigitGroupingSymbol);
 
 		config.Section = nameof(MinimalUi);
 		config.WriteBool(nameof(MinimalUi.ShowName), MinimalUi.ShowName);
-		config.WriteBool(nameof(MinimalUi.ShowAvgDayPrice), MinimalUi.ShowAvgDayPrice);
-		config.WriteBool(nameof(MinimalUi.ShowPricePerSlot), MinimalUi.ShowPricePerSlot);
-		config.WriteBool(nameof(MinimalUi.ShowTraderPrice), MinimalUi.ShowTraderPrice);
-		config.WriteBool(nameof(MinimalUi.ShowUpdated), MinimalUi.ShowUpdated);
-		config.WriteBool(nameof(MinimalUi.ShowKappa), MinimalUi.ShowKappa);
-		config.WriteBool(nameof(MinimalUi.ShowQuestHideoutTracker), MinimalUi.ShowQuestHideoutTracker);
-		config.WriteBool(nameof(MinimalUi.ShowQuestHideoutTeamTracker), MinimalUi.ShowQuestHideoutTeamTracker);
+		config.WriteBool(nameof(MinimalUi.ShowValue), MinimalUi.ShowValue);
+		config.WriteBool(nameof(MinimalUi.ShowValuePerSlot), MinimalUi.ShowValuePerSlot);
+		config.WriteBool(nameof(MinimalUi.ShowRarity), MinimalUi.ShowRarity);
+		config.WriteBool(nameof(MinimalUi.ShowWeight), MinimalUi.ShowWeight);
+		config.WriteBool(nameof(MinimalUi.ShowRecycle), MinimalUi.ShowRecycle);
 		config.WriteInt(nameof(MinimalUi.Opacity), MinimalUi.Opacity);
-
-		config.Section = nameof(Tracking);
-		config.WriteBool(nameof(Tracking.ShowNonFIRNeeds), Tracking.ShowNonFIRNeeds);
-		config.WriteBool(nameof(Tracking.ShowKappaNeeds), Tracking.ShowKappaNeeds);
-
-		config.Section = nameof(Tracking.TarkovTracker);
-		config.WriteInt(nameof(Tracking.TarkovTracker.Backend), (int)Tracking.TarkovTracker.Backend);
-		config.WriteSecureString(nameof(Tracking.TarkovTracker.Token), Tracking.TarkovTracker.Token);
-		config.WriteBool(nameof(Tracking.TarkovTracker.ShowTeam), Tracking.TarkovTracker.ShowTeam);
 
 		config.Section = nameof(Overlay);
 
@@ -300,7 +255,6 @@ internal static class RatConfig {
 		config.WriteInt(nameof(ScreenWidth), ScreenWidth);
 		config.WriteInt(nameof(ScreenHeight), ScreenHeight);
 		config.WriteFloat(nameof(ScreenScale), ScreenScale);
-		config.WriteInt(nameof(GameMode), (int)GameMode);
 		config.WriteBool(nameof(MinimizeToTray), MinimizeToTray);
 		config.WriteBool(nameof(AlwaysOnTop), AlwaysOnTop);
 		config.WriteBool(nameof(LogDebug), LogDebug);
@@ -329,10 +283,13 @@ internal static class RatConfig {
 	}
 
 	/// <summary>
-	/// Get the current screen config from tarkov's config files or default to the primary screen
+	/// Get the current screen config from the primary screen
 	/// </summary>
 	internal static void TrySetScreenConfig() {
-		(int width, int height, double scale) = GetTarkovScreenConfig();
+		int width = Screen.PrimaryScreen.Bounds.Width;
+		int height = Screen.PrimaryScreen.Bounds.Height;
+		double scale = GetScalingForScreen(Screen.PrimaryScreen);
+
 		ScreenWidth = width;
 		ScreenHeight = height;
 		ScreenScale = (float)scale;
@@ -358,35 +315,4 @@ internal static class RatConfig {
 		return dpiX / 96.0;
 	}
 
-	private static (int widht, int height, double scale) GetTarkovScreenConfig() {
-		try {
-			string configPath = Environment.ExpandEnvironmentVariables(@"%AppData%\Battlestate Games\Escape From Tarkov\Settings\Graphics.ini");
-			using FileStream file = new(configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-			using StreamReader reader = new(file, Encoding.UTF8);
-
-			JObject json = JObject.Parse(reader.ReadToEnd());
-
-			int activeDisplay = json["DisplaySettings"]["Display"].ToObject<int>();
-			JToken? windowRes = json["Stored"][activeDisplay.ToString()]["WindowResolution"];
-			int width = windowRes["Width"].ToObject<int>();
-			int height = windowRes["Height"].ToObject<int>();
-
-			Screen usedScreen = Screen.AllScreens[activeDisplay];
-			double scale = GetScalingForScreen(usedScreen);
-
-			return (width, height, scale);
-		} catch (Exception e) {
-			Logger.LogWarning("Unable to query Escape From Tarkov graphic settings.", e);
-
-			int width = Screen.PrimaryScreen.Bounds.Width;
-			int height = Screen.PrimaryScreen.Bounds.Height;
-			double scale = GetScalingForScreen(Screen.PrimaryScreen);
-
-			string message = $"Detected {width}x{height} Resolution at {scale} Scale.\n\n";
-			message += "You can adjust this inside the settings.";
-			Logger.ShowMessage(message);
-
-			return (width, height, scale);
-		}
-	}
 }

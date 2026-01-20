@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿#if false
+using Newtonsoft.Json;
 using RatScanner.FetchModels.TarkovTracker;
 using System;
 using System.Collections.Generic;
@@ -135,3 +136,4 @@ public class TarkovTrackerDB {
 		return result ?? throw new Exception("Failed to deserialize token response");
 	}
 }
+#endif

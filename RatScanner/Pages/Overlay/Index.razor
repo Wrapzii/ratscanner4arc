@@ -38,42 +38,53 @@
                         </div>
 
                         <div style="overflow: hidden;">
-                            @if (item.Avg24HPrice >= item.GetBestTraderOffer()?.PriceRub)
+                            @if (SettingsVM.LogDebug && !string.IsNullOrWhiteSpace(item.Name))
                             {
                                 <div class="stroke">
-                                    @item.Avg24HPrice.ToShortString().AsRubs()
+                                    @item.Name
                                 </div>
                             }
-                            else
+                            @if (item.Value > 0)
                             {
-                                <div class="d-flex align-center stroke">
-                                    @item.GetBestTraderOffer()?.PriceRub.ToShortString().AsRubs()
-                                    <MudAvatar Image="@(item.GetBestTraderOfferVendor()?.Trader?.ImageLink)"
-                                               Size="Size.Small" Style="float: right;" Class="ml-1" />
+                                <div class="stroke">
+                                    @item.Value.AsCredits()
                                 </div>
                             }
-
-                            @if (MenuVM.TaskRemaining > 0)
+                            @if (item.ValuePerSlot > 0)
                             {
-                                <div class="d-flex align-center stroke">
-                                    @MenuVM.TaskRemaining <MudIcon Icon="@Icons.Material.Filled.Checklist" Size="Size.Small" Class="ml-1" />
+                                <div class="stroke">
+                                    @item.ValuePerSlot.AsCredits()
+                                    <span class="ml-1">/ slot</span>
                                 </div>
                             }
-                            @if (MenuVM.HideoutRemaining > 0)
+                            @if (!string.IsNullOrWhiteSpace(item.Rarity))
                             {
-                                <div class="d-flex align-center stroke">
-                                    @MenuVM.HideoutRemaining <MudIcon Icon="@Icons.Material.Filled.House" Size="Size.Small" Class="ml-1" />
+                                <div class="stroke">
+                                    @item.Rarity
+                                </div>
+                            }
+                            @if (item.Weight > 0)
+                            {
+                                <div class="stroke">
+                                    @item.Weight.ToString("0.##") kg
                                 </div>
                             }
                             @{
                                 var recycleRec = item.GetRecycleRecommendation();
-                                if (recycleRec.shouldRecycle)
-                                {
-                                    <div class="d-flex align-center stroke" style="color: #ff9800;">
-                                        <MudIcon Icon="@Icons.Material.Filled.Recycling" Size="Size.Small" Class="mr-1" /> RECYCLE
-                                    </div>
-                                }
+                                var recycleColor = recycleRec.decision switch {
+                                    RecycleDecision.Recycle => "#ff9800",
+                                    RecycleDecision.Keep => "#4caf50",
+                                    _ => "#bdbdbd"
+                                };
+                                var recycleLabel = recycleRec.decision switch {
+                                    RecycleDecision.Recycle => "RECYCLE",
+                                    RecycleDecision.Keep => "KEEP",
+                                    _ => "SELL"
+                                };
                             }
+                            <div class="d-flex align-center stroke" style="@($"color: {recycleColor};")">
+                                <MudIcon Icon="@Icons.Material.Filled.Recycling" Size="Size.Small" Class="mr-1" /> @recycleLabel
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -85,35 +96,58 @@
 	                                                   top: @(itemScan.GetToolTipPosition().Y - VirtualScreenOffset.YOffset)px;
 	                                                   background: #121212; padding: 4px;">
 
-                    @if (item.Avg24HPrice >= item.GetBestTraderOffer()?.PriceRub) {
-                        <div class="stroke">
-                            @item.Avg24HPrice.ToShortString().AsRubs()
-                        </div>
-                    }
-                    else
+                    @if (!string.IsNullOrWhiteSpace(itemScan.IconPath))
                     {
-                        <div class="d-flex align-center stroke">
-                            @item.GetBestTraderOffer()?.PriceRub.ToShortString().AsRubs()
-                            <MudAvatar Image="@(item.GetBestTraderOfferVendor()?.Trader?.ImageLink)"
-                                       Size="Size.Small" Style="float: right;" Class="ml-1" />
+                        <img src="@GetIconURLFromPath(itemScan.IconPath, item.ImageLink ?? "")" style="width: 48px; height: 48px; margin-right: 6px;" />
+                    }
+
+                    @if (SettingsVM.LogDebug && !string.IsNullOrWhiteSpace(item.Name))
+                    {
+                        <div class="stroke">
+                            @item.Name
                         </div>
                     }
 
-                    @if (MenuVM.TaskRemaining > 0)
+                    @if (item.Value > 0)
                     {
-                        <MudIcon Icon="@Icons.Material.Filled.Checklist" Size="Size.Small" Class="ml-1" />
+                        <div class="stroke">
+                            @item.Value.AsCredits()
+                        </div>
                     }
-                    @if (MenuVM.HideoutRemaining > 0)
+                    @if (item.ValuePerSlot > 0)
                     {
-                        <MudIcon Icon="@Icons.Material.Filled.House" Size="Size.Small" Class="ml-1" />
+                        <div class="stroke">
+                            @item.ValuePerSlot.AsCredits()
+                            <span class="ml-1">/ slot</span>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(item.Rarity))
+                    {
+                        <div class="stroke">
+                            @item.Rarity
+                        </div>
+                    }
+                    @if (item.Weight > 0)
+                    {
+                        <div class="stroke">
+                            @item.Weight.ToString("0.##") kg
+                        </div>
                     }
                     @{
                         var recycleRec = item.GetRecycleRecommendation();
-                        if (recycleRec.shouldRecycle)
-                        {
-                            <MudIcon Icon="@Icons.Material.Filled.Recycling" Size="Size.Small" Class="ml-1" style="color: #ff9800;" />
-                        }
+                        var recycleColor = recycleRec.decision switch {
+                            RecycleDecision.Recycle => "#ff9800",
+                            RecycleDecision.Keep => "#4caf50",
+                            _ => "#bdbdbd"
+                        };
+                        var recycleLabel = recycleRec.decision switch {
+                            RecycleDecision.Recycle => "RECYCLE",
+                            RecycleDecision.Keep => "KEEP",
+                            _ => "SELL"
+                        };
                     }
+                    <MudIcon Icon="@Icons.Material.Filled.Recycling" Size="Size.Small" Class="ml-1" style="@($"color: {recycleColor};")" />
+                    <span class="ml-1 stroke" style="@($"color: {recycleColor};")">@recycleLabel</span>
                 </div>
             }
         }
@@ -123,15 +157,30 @@
 @code {
     private string GetIconURL(ItemIconScan itemScan)
     {
-        var path = itemScan.IconPath;
+        return GetIconURLFromPath(itemScan.IconPath, itemScan.Item.ImageLink ?? "");
+    }
 
-        if (string.IsNullOrEmpty(path)) return itemScan.Item.BaseImageLink ?? "";
+    private string GetIconURLFromPath(string? path, string fallback)
+    {
+        if (string.IsNullOrEmpty(path)) return fallback;
 
         path = path.Replace("\\", "/");
-        var pathEnd = path[path.IndexOf("Data/icons/")..path.Length];
-        pathEnd = pathEnd[5..pathEnd.Length];
-        var url = "https://local.data/" + pathEnd;
-        return url;
+        var iconsIndex = path.IndexOf("Data/icons/", System.StringComparison.OrdinalIgnoreCase);
+        if (iconsIndex >= 0)
+        {
+            var pathEnd = path[iconsIndex..path.Length];
+            pathEnd = pathEnd[5..pathEnd.Length];
+            return "https://local.data/" + pathEnd;
+        }
+
+        var dataIndex = path.IndexOf("Data/", System.StringComparison.OrdinalIgnoreCase);
+        if (dataIndex >= 0)
+        {
+            var pathEnd = path[(dataIndex + 5)..path.Length];
+            return "https://local.data/" + pathEnd;
+        }
+
+        return fallback;
     }
 
     protected override void OnInitialized()

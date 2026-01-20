@@ -1,21 +1,26 @@
 ﻿using RatEye;
+using System;
 
 namespace RatScanner.Scan;
 
 public class DefaultItemScan : ItemScan {
-	public DefaultItemScan() { }
+	private Vector2 _toolTipPosition = Vector2.Zero;
 
-	public DefaultItemScan(TarkovDev.GraphQL.Item item) {
+	public DefaultItemScan() {
+		DissapearAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + RatConfig.ToolTip.Duration;
+	}
+
+	public DefaultItemScan(ArcRaidersData.ArcItem item) : this(item, Vector2.Zero) { }
+
+	public DefaultItemScan(ArcRaidersData.ArcItem item, Vector2 toolTipPosition, int? duration = null, string? iconPathOverride = null) {
 		Item = item;
-
-		string pathEnding = "unknown-item-grid-image.jpg";
-		string path = "https://assets.tarkov.dev/" + pathEnding;
-
 		Confidence = 1;
-		IconPath = path;
+		IconPath = iconPathOverride ?? item.ImageLink ?? RatConfig.Paths.UnknownIcon;
+		_toolTipPosition = toolTipPosition;
+		DissapearAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + (duration ?? RatConfig.ToolTip.Duration);
 	}
 
 	public override Vector2 GetToolTipPosition() {
-		return Vector2.Zero;
+		return _toolTipPosition;
 	}
 }

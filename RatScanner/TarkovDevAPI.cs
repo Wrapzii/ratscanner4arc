@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿#if false
+using Newtonsoft.Json;
 using RatScanner.TarkovDev.GraphQL;
 using System;
 using System.Collections.Concurrent;
@@ -387,3 +388,4 @@ public static class TarkovDevAPI {
 
 	#endregion
 }
+#endif

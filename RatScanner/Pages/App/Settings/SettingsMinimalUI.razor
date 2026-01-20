@@ -13,13 +13,11 @@
             <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
                 <MudStack Spacing="0">
                     <MudCheckBox @bind-Checked="SettingsVM.ShowName" Label="Name" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowAvgDayPrice" Label="Avg. Daily Price" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowPricePerSlot" Label="Price per Slot" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowTraderPrice" Label="Trader Price" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowKappa" Label="Kappa Needed" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowQuestHideoutTracker" Label="Needed Quest & Hideout" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowQuestHideoutTeamTracker" Label="Needed Quest & Hideout Team" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowUpdated" Label="Updated Timestamp" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Checked="SettingsVM.ShowValue" Label="Value" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Checked="SettingsVM.ShowValuePerSlot" Label="Value per Slot" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Checked="SettingsVM.ShowRarity" Label="Rarity" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Checked="SettingsVM.ShowWeight" Label="Weight" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Checked="SettingsVM.ShowRecycle" Label="Recycle Recommendation" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
                     <MudSlider Step="10" @bind-Value="SettingsVM.Opacity" Min="0" Max="100" Dense="true" Color="Color.Primary">
                         <MudText Typo="Typo.subtitle2" Class="mt-0">Opacity: @SettingsVM.Opacity.ToString()</MudText>
                     </MudSlider>

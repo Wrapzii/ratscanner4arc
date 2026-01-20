@@ -1,9 +1,11 @@
-﻿using Newtonsoft.Json;
+﻿#if false
+using Newtonsoft.Json;
 using System.Collections.Generic;
+
 
 namespace RatScanner
 {
-    public class InteractiveMapData
+	public class InteractiveMapData
 	{
 		[JsonProperty("normalizedName")]
 		public string NormalizedName { get; set; }
@@ -135,3 +137,4 @@ namespace RatScanner
 		}
 	}
 }
+#endif

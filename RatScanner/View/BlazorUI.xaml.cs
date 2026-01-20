@@ -4,6 +4,7 @@ using MudBlazor.Services;
 using RatScanner.ViewModel;
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,11 +17,11 @@ namespace RatScanner.View;
 /// Interaction logic for BlazorUI.xaml
 /// </summary>
 public partial class BlazorUI : UserControl, ISwitchable {
-	private static BlazorUI _instance = null;
-	public static BlazorUI Instance => _instance ??= new BlazorUI();
+	private static readonly Lazy<BlazorUI> _instance = new(() => new BlazorUI());
+	public static BlazorUI Instance => _instance.Value;
 
-	public static BlazorOverlay BlazorOverlay { get; set; }
-	public static BlazorInteractableOverlay BlazorInteractableOverlay { get; set; }
+	public static BlazorOverlay BlazorOverlay { get; private set; } = null!;
+	public static BlazorInteractableOverlay BlazorInteractableOverlay { get; private set; } = null!;
 
 	private BlazorUI() {
 		ServiceCollection serviceCollection = new();
@@ -41,16 +42,14 @@ public partial class BlazorUI : UserControl, ISwitchable {
 		}
 		serviceCollection.AddSingleton<VirtualScreenOffset>(s => new VirtualScreenOffset(left, top));
 
-		serviceCollection.AddSingleton<TarkovTrackerDB>(s => RatScannerMain.Instance.TarkovTrackerDB);
-
 		ServiceProvider serviceProvider = serviceCollection.BuildServiceProvider();
 
 		Resources.Add("services", serviceProvider);
 
-		BlazorOverlay ??= new BlazorOverlay(serviceProvider);
+		BlazorOverlay = new BlazorOverlay(serviceProvider);
 		BlazorOverlay.Show();
 
-		BlazorInteractableOverlay ??= new BlazorInteractableOverlay(serviceProvider);
+		BlazorInteractableOverlay = new BlazorInteractableOverlay(serviceProvider);
 
 		InitializeComponent();
 	}
@@ -67,7 +66,9 @@ public partial class BlazorUI : UserControl, ISwitchable {
 	}
 
 	private void CoreWebView_Loaded(object? sender, CoreWebView2InitializationCompletedEventArgs e) {
-		blazorWebView.WebView.CoreWebView2.SetVirtualHostNameToFolderMapping("local.data", "Data", CoreWebView2HostResourceAccessKind.Allow);
+		string dataPath = Path.Combine(AppContext.BaseDirectory, "Data");
+		Directory.CreateDirectory(dataPath);
+		blazorWebView.WebView.CoreWebView2.SetVirtualHostNameToFolderMapping("local.data", dataPath, CoreWebView2HostResourceAccessKind.Allow);
 		blazorWebView.WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
 		blazorWebView.WebView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
 	}

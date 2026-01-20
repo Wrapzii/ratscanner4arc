@@ -1,3 +1,4 @@
+#if false
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -97,3 +98,4 @@ public static class MapDataLoader
 		return mapData?.SvgPath;
 	}
 }
+#endif

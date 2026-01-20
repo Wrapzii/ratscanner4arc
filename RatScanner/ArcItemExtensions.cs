@@ -2,6 +2,12 @@ using System;
 
 namespace RatScanner;
 
+public enum RecycleDecision {
+	Recycle,
+	Sell,
+	Keep
+}
+
 /// <summary>
 /// Extension methods for Arc Raiders items
 /// </summary>
@@ -19,33 +25,49 @@ public static class ArcItemExtensions {
 	/// </summary>
 	/// <param name="item">The item to evaluate</param>
 	/// <returns>Tuple indicating if item should be recycled and the reason</returns>
-	public static (bool shouldRecycle, string reason) GetRecycleRecommendation(this ArcRaidersData.ArcItem item) {
+	public static (RecycleDecision decision, string reason) GetRecycleRecommendation(this ArcRaidersData.ArcItem item) {
 		// Check if item is needed for quests
 		if (item.IsQuestItem) {
-			return (false, "Needed for quest");
+			return (RecycleDecision.Keep, "Needed for quest");
 		}
 		
 		// Check if item is needed for base building
 		if (item.IsBaseItem) {
-			return (false, "Needed for base");
+			return (RecycleDecision.Keep, "Needed for base");
 		}
 		
-		// Get value per slot to determine efficiency
-		int valuePerSlot = item.ValuePerSlot;
+		// Check if item is commonly needed for crafting
+		if (item.IsCraftingItem) {
+			string note = string.IsNullOrWhiteSpace(item.CraftingNote) ? "Crafting material" : item.CraftingNote;
+			return (RecycleDecision.Keep, note);
+		}
 		
-		// Low value threshold - items worth less per slot should be recycled
+		// If recycle value is known, compare trader vs scrap
+		if (item.RecycleValue > 0) {
+			if (item.RecycleValue > item.Value) {
+				return (RecycleDecision.Recycle, $"Recycle ({item.RecycleValue.AsCredits()} > {item.Value.AsCredits()})");
+			}
+			if (item.RecycleValue < item.Value) {
+				return (RecycleDecision.Sell, $"Sell ({item.Value.AsCredits()} > {item.RecycleValue.AsCredits()})");
+			}
+			return (RecycleDecision.Sell, $"Either (both {item.Value.AsCredits()})");
+		}
+		
+		bool isRecyclable = item.IsRecyclable || item.Category.Equals("Recyclable", StringComparison.OrdinalIgnoreCase);
+		string heuristicSuffix = isRecyclable ? "" : " (heuristic)";
+		
+		// Fallback: use value per slot to determine efficiency
+		int valuePerSlot = item.ValuePerSlot;
 		const int lowValueThreshold = 50;
 		if (valuePerSlot < lowValueThreshold) {
-			return (true, "Low value per slot");
+			return (RecycleDecision.Recycle, $"Recycle (low value per slot{heuristicSuffix})");
 		}
 		
-		// If item has decent value, keep it
 		if (item.Value > 200) {
-			return (false, "Good value");
+			return (RecycleDecision.Sell, $"Sell (good value{heuristicSuffix})");
 		}
 		
-		// Default to recycle if no clear value
-		return (true, "Low overall value");
+		return (RecycleDecision.Recycle, $"Recycle (low overall value{heuristicSuffix})");
 	}
 	
 	/// <summary>

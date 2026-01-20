@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿#if false
+using Newtonsoft.Json;
 
 namespace RatScanner.FetchModels.TarkovTracker;
 
@@ -14,3 +15,4 @@ public class ProgressResponse {
 		public string Self { get; set; } = "";
 	}
 }
+#endif

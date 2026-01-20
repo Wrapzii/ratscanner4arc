@@ -2,7 +2,6 @@
 @layout SettingsLayout
 @inject SettingsVM SettingsVM
 @inject IJSRuntime JSRuntime;
-@using RatScanner.TarkovDev.GraphQL;
 @implements IDisposable
 <div>
     <MudGrid Class="pa-0 ma-0" Spacing="0" Style="height: 100%;">
@@ -37,7 +36,6 @@
         <MudItem xs="12">
             <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
                 <MudGrid Spacing="0" Class="pa-0 ma-0">
-                    <MudCheckBox @bind-Checked="@SettingsVM.GameMode" Label="Use PVE data" Dense="true" Size="Size.Small" Class="pa-0 ma-0" Converter="@gameModeConverter"></MudCheckBox>
                     <!--<MudCheckBox @bind-Checked="@SettingsVM.MinimizeToTray" Label="Minimize to tray" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>-->
                     <MudCheckBox @bind-Checked="@SettingsVM.AlwaysOnTop" Label="Always on top" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
                     <MudCheckBox @bind-Checked="@SettingsVM.LogDebug" Label="Log debug info" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
@@ -48,11 +46,6 @@
 </div>
 
 @code {
-
-    MudBlazor.Converter<GameMode, bool?> gameModeConverter = new MudBlazor.Converter<GameMode, bool?> {
-            SetFunc = value => value == GameMode.Pve,
-            GetFunc = value => value ?? false ? GameMode.Pve : GameMode.Regular,
-        };
 
     Converter<float> percentageConverter = new Converter<float> {
             SetFunc = value => (int)(value * 100) + "%",

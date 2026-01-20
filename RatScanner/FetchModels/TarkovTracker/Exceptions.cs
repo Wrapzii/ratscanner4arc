@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if false
+using System;
 
 namespace RatScanner.FetchModels.TarkovTracker;
 
@@ -23,3 +24,4 @@ public class UnauthorizedTokenException : Exception {
 	public UnauthorizedTokenException(string message, Exception inner)
 		: base(message, inner) { }
 }
+#endif

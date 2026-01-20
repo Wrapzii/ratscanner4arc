@@ -10,7 +10,13 @@ public class ItemNameScan : ItemScan {
 
 	public ItemNameScan(Inspection inspection, Vector2 toolTipPosition, int duration) {
 		RatStash.Item inspectionItem = inspection.Item;
-		Item = TarkovDevAPI.GetItems().FirstOrDefault(item => item.Id == inspectionItem.Id) ?? throw new Exception($"Unknown item: {inspection.Item.Id}");
+		Item = ArcRaidersData.GetItemById(inspectionItem.Id)
+			?? ArcRaidersData.GetItemByName(inspectionItem.Name)
+			?? new ArcRaidersData.ArcItem {
+				Id = inspectionItem.Id,
+				Name = string.IsNullOrWhiteSpace(inspectionItem.Name) ? "Unknown Item" : inspectionItem.Name,
+				ShortName = string.IsNullOrWhiteSpace(inspectionItem.ShortName) ? "Unknown" : inspectionItem.ShortName,
+			};
 		Confidence = inspection.MarkerConfidence;
 		IconPath = inspection.IconPath;
 		_toolTipPosition = toolTipPosition;

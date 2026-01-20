@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Web.WebView2.Core;
+using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -58,7 +60,9 @@ public partial class BlazorOverlay : Window {
 	}
 
 	private void CoreWebView_Loaded(object? sender, CoreWebView2InitializationCompletedEventArgs e) {
-		blazorOverlayWebView.WebView.CoreWebView2.SetVirtualHostNameToFolderMapping("local.data", "Data", CoreWebView2HostResourceAccessKind.Allow);
+		string dataPath = Path.Combine(AppContext.BaseDirectory, "Data");
+		Directory.CreateDirectory(dataPath);
+		blazorOverlayWebView.WebView.CoreWebView2.SetVirtualHostNameToFolderMapping("local.data", dataPath, CoreWebView2HostResourceAccessKind.Allow);
 		blazorOverlayWebView.WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
 		blazorOverlayWebView.WebView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
 	}

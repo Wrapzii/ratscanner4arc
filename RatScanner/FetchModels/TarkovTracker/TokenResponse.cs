@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿#if false
+using Newtonsoft.Json;
 using System.Collections.Generic;
 
 namespace RatScanner.FetchModels.TarkovTracker;
@@ -13,3 +14,4 @@ public class TokenResponse {
 	[JsonProperty("permissions")]
 	public List<string> Permissions { get; set; } = new();
 }
+#endif

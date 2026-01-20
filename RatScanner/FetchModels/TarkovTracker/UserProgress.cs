@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿#if false
+using Newtonsoft.Json;
 using System.Collections.Generic;
 
 namespace RatScanner.FetchModels.TarkovTracker;
@@ -23,3 +24,4 @@ public class UserProgress {
 	[JsonProperty("hideoutPartsProgress")]
 	public List<Progress> HideoutParts { get; set; } = new();
 }
+#endif
