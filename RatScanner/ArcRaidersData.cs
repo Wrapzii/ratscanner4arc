@@ -13,6 +13,12 @@ namespace RatScanner;
 /// Source: https://metaforge.app/api/arc-raiders/items
 /// </summary>
 public static class ArcRaidersData {
+	public static event Action? AuxDataUpdated;
+	private static readonly object OverrideReloadLock = new();
+	private static FileSystemWatcher? OverrideWatcher;
+	private static DateTime LastOverrideReloadUtc = DateTime.MinValue;
+	private static readonly object RecycleFetchLock = new();
+	private static readonly HashSet<string> PendingRecycleOutputFetches = new(StringComparer.OrdinalIgnoreCase);
 	
 	/// <summary>
 	/// Simplified item class for Arc Raiders with hardcoded values
@@ -25,6 +31,7 @@ public static class ArcRaidersData {
 		public int Height { get; set; } = 1;
 		public int Value { get; set; } = 0; // Static value for Arc Raiders (no dynamic market)
 		public int RecycleValue { get; set; } = 0; // Estimated recycle value (if known)
+		public List<RecycleOutput> RecycleOutputs { get; set; } = new();
 		public bool IsQuestItem { get; set; } = false;
 		public bool IsBaseItem { get; set; } = false; // For base building
 		public bool IsRecyclable { get; set; } = false;
@@ -38,6 +45,12 @@ public static class ArcRaidersData {
 		
 		// Calculated property
 		public int ValuePerSlot => Value / Math.Max(1, Width * Height);
+	}
+
+	public class RecycleOutput {
+		public string Id { get; set; } = "";
+		public string? Name { get; set; }
+		public int Quantity { get; set; } = 1;
 	}
 	
 	/// <summary>
@@ -63,8 +76,10 @@ public static class ArcRaidersData {
 			if (items == null) return new List<ArcItem>();
 
 			ApplyRecycleValueOverrides(items);
+			ApplyRecycleOutputOverrides(items);
 			ApplyCraftingKeepOverrides(items);
 			EnsureAuxData(items);
+			EnsureOverrideWatchers();
 			return items;
 		} catch {
 			return new List<ArcItem>();
@@ -73,6 +88,7 @@ public static class ArcRaidersData {
 
 	private static string GetDataPath() => Path.Combine(AppContext.BaseDirectory, "Resources", "ArcRaidersItems.json");
 	private static string GetRecycleOverridesPath() => Path.Combine(AppContext.BaseDirectory, "Resources", "ArcRaidersRecycleValues.json");
+	private static string GetRecycleOutputsPath() => Path.Combine(AppContext.BaseDirectory, "Resources", "ArcRaidersRecycleOutputs.json");
 	private static string GetCraftingOverridesPath() => Path.Combine(AppContext.BaseDirectory, "Resources", "ArcRaidersCraftingKeep.json");
 
 	private static bool HasValidOverrideFile(string path) {
@@ -108,6 +124,27 @@ public static class ArcRaidersData {
 		}
 	}
 
+	private static void ApplyRecycleOutputOverrides(List<ArcItem> items) {
+		try {
+			string overridePath = GetRecycleOutputsPath();
+			if (!File.Exists(overridePath)) return;
+
+			string json = File.ReadAllText(overridePath);
+			var overrides = JsonSerializer.Deserialize<Dictionary<string, List<RecycleOutput>>>(json, new JsonSerializerOptions {
+				PropertyNameCaseInsensitive = true
+			});
+			if (overrides == null || overrides.Count == 0) return;
+
+			foreach (var item in items) {
+				if (overrides.TryGetValue(item.Id, out var outputs) && outputs != null) {
+					item.RecycleOutputs = outputs;
+				}
+			}
+		} catch {
+			// Ignore override failures
+		}
+	}
+
 	private static void ApplyCraftingKeepOverrides(List<ArcItem> items) {
 		try {
 			string overridePath = GetCraftingOverridesPath();
@@ -132,13 +169,16 @@ public static class ArcRaidersData {
 
 	private static void EnsureAuxData(List<ArcItem> items) {
 		bool needsRecycle = !HasValidOverrideFile(GetRecycleOverridesPath());
+		bool needsRecycleOutputs = !HasValidOverrideFile(GetRecycleOutputsPath());
 		bool needsCrafting = !HasValidOverrideFile(GetCraftingOverridesPath());
-		if (!needsRecycle && !needsCrafting) return;
+		if (!needsRecycle && !needsRecycleOutputs && !needsCrafting) return;
 
 		_ = Task.Run(async () => {
 			try {
 				var recycleMap = new Dictionary<string, int>();
+				var recycleOutputsMap = new Dictionary<string, List<RecycleOutput>>();
 				var craftingMap = new Dictionary<string, string>();
+				bool anyUpdates = false;
 
 				foreach (var item in items) {
 					if (string.IsNullOrWhiteSpace(item.Id)) continue;
@@ -147,12 +187,19 @@ public static class ArcRaidersData {
 					if (needsRecycle && details.totalRecycleValue > 0) {
 						recycleMap[item.Id] = details.totalRecycleValue;
 						item.RecycleValue = details.totalRecycleValue;
+						anyUpdates = true;
+					}
+					if (needsRecycleOutputs && details.recycleOutputs.Count > 0) {
+						recycleOutputsMap[item.Id] = details.recycleOutputs;
+						item.RecycleOutputs = details.recycleOutputs;
+						anyUpdates = true;
 					}
 					if (needsCrafting && details.usedInCount > 0) {
 						string note = $"Used in {details.usedInCount} recipes";
 						craftingMap[item.Id] = note;
 						item.IsCraftingItem = true;
 						item.CraftingNote = note;
+						anyUpdates = true;
 					}
 
 					await Task.Delay(MetaforgeDelayMs).ConfigureAwait(false);
@@ -161,8 +208,14 @@ public static class ArcRaidersData {
 				if (needsRecycle && recycleMap.Count > 0) {
 					WriteOverrides(GetRecycleOverridesPath(), recycleMap);
 				}
+				if (needsRecycleOutputs && recycleOutputsMap.Count > 0) {
+					WriteOverrides(GetRecycleOutputsPath(), recycleOutputsMap);
+				}
 				if (needsCrafting && craftingMap.Count > 0) {
 					WriteOverrides(GetCraftingOverridesPath(), craftingMap);
+				}
+				if (anyUpdates) {
+					AuxDataUpdated?.Invoke();
 				}
 			} catch {
 				// Ignore fetch failures
@@ -170,24 +223,78 @@ public static class ArcRaidersData {
 		});
 	}
 
-	private static async Task<(int totalRecycleValue, int usedInCount)> TryFetchMetaforgeItemDetailsAsync(string itemId) {
+	private static void EnsureOverrideWatchers() {
+		if (OverrideWatcher != null) return;
+		try {
+			string dir = Path.Combine(AppContext.BaseDirectory, "Resources");
+			if (!Directory.Exists(dir)) return;
+
+			OverrideWatcher = new FileSystemWatcher(dir) {
+				Filter = "ArcRaiders*.json",
+				IncludeSubdirectories = false,
+				NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size
+			};
+
+			OverrideWatcher.Changed += (_, e) => TryReloadOverrides(e.Name);
+			OverrideWatcher.Created += (_, e) => TryReloadOverrides(e.Name);
+			OverrideWatcher.Renamed += (_, e) => TryReloadOverrides(e.Name);
+			OverrideWatcher.EnableRaisingEvents = true;
+		} catch {
+			// Ignore watcher failures
+		}
+	}
+
+	private static void TryReloadOverrides(string? fileName) {
+		if (string.IsNullOrWhiteSpace(fileName)) return;
+		if (!IsOverrideFile(fileName)) return;
+
+		lock (OverrideReloadLock) {
+			var now = DateTime.UtcNow;
+			if ((now - LastOverrideReloadUtc).TotalMilliseconds < 500) return;
+			LastOverrideReloadUtc = now;
+		}
+
+		Task.Run(() => {
+			try {
+				lock (OverrideReloadLock) {
+					var items = Items.Value;
+					ApplyRecycleValueOverrides(items);
+					ApplyRecycleOutputOverrides(items);
+					ApplyCraftingKeepOverrides(items);
+				}
+				AuxDataUpdated?.Invoke();
+			} catch {
+				// Ignore reload failures
+			}
+		});
+	}
+
+	private static bool IsOverrideFile(string fileName) {
+		return fileName.Equals("ArcRaidersRecycleValues.json", StringComparison.OrdinalIgnoreCase)
+			|| fileName.Equals("ArcRaidersRecycleOutputs.json", StringComparison.OrdinalIgnoreCase)
+			|| fileName.Equals("ArcRaidersCraftingKeep.json", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static async Task<(int totalRecycleValue, int usedInCount, List<RecycleOutput> recycleOutputs)> TryFetchMetaforgeItemDetailsAsync(string itemId) {
 		try {
 			string url = $"https://metaforge.app/arc-raiders/database/item/{itemId}/__data.json";
 			using var stream = await MetaforgeClient.GetStreamAsync(url).ConfigureAwait(false);
 			using var doc = await JsonDocument.ParseAsync(stream).ConfigureAwait(false);
 			if (!doc.RootElement.TryGetProperty("nodes", out var nodes) || nodes.GetArrayLength() < 3) {
-				return (0, 0);
+				return (0, 0, new List<RecycleOutput>());
 			}
 			var dataElement = nodes[2].GetProperty("data");
 			var data = dataElement.EnumerateArray().ToArray();
 			var cache = new Dictionary<int, object?>();
 			var root = ResolveNode(data, data[0], cache) as Dictionary<string, object?>;
-			if (root == null) return (0, 0);
+			if (root == null) return (0, 0, new List<RecycleOutput>());
 
 			int totalRecycleValue = 0;
 			if (root.TryGetValue("totalRecycleValue", out var totalRecycleObj)) {
 				totalRecycleValue = Convert.ToInt32(totalRecycleObj);
 			}
+
+			var recycleOutputs = ExtractRecycleOutputs(root);
 
 			int usedInCount = 0;
 			if (root.TryGetValue("item", out var itemObj) && itemObj is Dictionary<string, object?> itemDict) {
@@ -196,10 +303,60 @@ public static class ArcRaidersData {
 				}
 			}
 
-			return (totalRecycleValue, usedInCount);
-		} catch {
-			return (0, 0);
+			return (totalRecycleValue, usedInCount, recycleOutputs);
+		} catch (Exception ex) {
+			Logger.LogDebug($"Recycle outputs fetch failed for {itemId}: {ex.Message}");
+			return (0, 0, new List<RecycleOutput>());
 		}
+	}
+
+	private static List<RecycleOutput> ExtractRecycleOutputs(Dictionary<string, object?> root) {
+		var outputs = new List<RecycleOutput>();
+		if (TryAddOutputs(root, "recycleComponentsDetails", outputs)) return outputs;
+		if (root.TryGetValue("item", out var itemObj) && itemObj is Dictionary<string, object?> itemDict) {
+			if (TryAddOutputs(itemDict, "recycle_components_details", outputs)) return outputs;
+			TryAddOutputs(itemDict, "recycle_components", outputs);
+		}
+		return outputs;
+	}
+
+	private static bool TryAddOutputs(Dictionary<string, object?> source, string key, List<RecycleOutput> outputs) {
+		if (!source.TryGetValue(key, out var detailsObj) || detailsObj == null) return false;
+		if (detailsObj is List<object?> list) {
+			foreach (var entry in list) {
+				if (entry is Dictionary<string, object?> dict) {
+					var output = ParseRecycleOutput(dict);
+					if (output != null) outputs.Add(output);
+				}
+			}
+			return outputs.Count > 0;
+		}
+		return false;
+	}
+
+	private static RecycleOutput? ParseRecycleOutput(Dictionary<string, object?> dict) {
+		string? id = null;
+		string? name = null;
+		int quantity = 1;
+
+		if (dict.TryGetValue("quantity", out var qtyObj) && qtyObj != null) {
+			quantity = Math.Max(1, Convert.ToInt32(qtyObj));
+		}
+
+		if (dict.TryGetValue("item", out var itemObj) && itemObj is Dictionary<string, object?> itemDict) {
+			if (itemDict.TryGetValue("id", out var idObj)) id = idObj?.ToString();
+			if (itemDict.TryGetValue("name", out var nameObj)) name = nameObj?.ToString();
+		} else {
+			if (dict.TryGetValue("id", out var idObj)) id = idObj?.ToString();
+			if (dict.TryGetValue("name", out var nameObj)) name = nameObj?.ToString();
+		}
+
+		if (string.IsNullOrWhiteSpace(id)) return null;
+		return new RecycleOutput {
+			Id = id ?? "",
+			Name = name,
+			Quantity = quantity
+		};
 	}
 
 	private static object? ResolveNode(JsonElement[] data, JsonElement element, Dictionary<int, object?> cache) {
@@ -242,6 +399,67 @@ public static class ArcRaidersData {
 		var ordered = map.OrderBy(kvp => kvp.Key).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 		string json = JsonSerializer.Serialize(ordered, new JsonSerializerOptions { WriteIndented = true });
 		File.WriteAllText(path, json);
+	}
+
+	public static void EnsureRecycleOutputsFor(string itemId) {
+		if (string.IsNullOrWhiteSpace(itemId)) return;
+		lock (RecycleFetchLock) {
+			if (PendingRecycleOutputFetches.Contains(itemId)) return;
+			PendingRecycleOutputFetches.Add(itemId);
+		}
+
+		Logger.LogDebug($"Recycle outputs fetch queued for {itemId}");
+
+		_ = Task.Run(async () => {
+			try {
+				Logger.LogDebug($"Recycle outputs fetch started for {itemId}");
+				var details = await TryFetchMetaforgeItemDetailsAsync(itemId).ConfigureAwait(false);
+				if (details.recycleOutputs.Count == 0) {
+					Logger.LogDebug($"Recycle outputs fetch empty for {itemId}");
+					return;
+				}
+
+				lock (RecycleFetchLock) {
+					var item = Items.Value.FirstOrDefault(i => i.Id.Equals(itemId, StringComparison.OrdinalIgnoreCase));
+					if (item != null) {
+						item.RecycleOutputs = details.recycleOutputs;
+					}
+				}
+
+				MergeRecycleOutputs(itemId, details.recycleOutputs);
+				Logger.LogDebug($"Recycle outputs fetch success for {itemId}: {details.recycleOutputs.Count} outputs");
+				AuxDataUpdated?.Invoke();
+			} catch {
+				// Ignore fetch failures
+			} finally {
+				lock (RecycleFetchLock) {
+					PendingRecycleOutputFetches.Remove(itemId);
+				}
+			}
+		});
+	}
+
+	private static void MergeRecycleOutputs(string itemId, List<RecycleOutput> outputs) {
+		try {
+			string path = GetRecycleOutputsPath();
+			var map = new Dictionary<string, List<RecycleOutput>>(StringComparer.OrdinalIgnoreCase);
+			if (File.Exists(path)) {
+				string json = File.ReadAllText(path);
+				var existing = JsonSerializer.Deserialize<Dictionary<string, List<RecycleOutput>>>(json, new JsonSerializerOptions {
+					PropertyNameCaseInsensitive = true
+				});
+				if (existing != null) {
+					foreach (var kvp in existing) {
+						map[kvp.Key] = kvp.Value ?? new List<RecycleOutput>();
+					}
+				}
+			}
+
+			map[itemId] = outputs;
+			WriteOverrides(path, map);
+		} catch {
+			// Ignore merge failures
+		}
 	}
 	
 	/// <summary>

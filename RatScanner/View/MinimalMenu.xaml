@@ -82,9 +82,10 @@
 			<Separator />
 			<Grid>
 				<Label Grid.Column="0" Content="Recycle/Sell/Keep" />
-				<Label Grid.Column="1"
-						 Content="{Binding RecycleReason}"
-						 d:Content="Low value per slot" />
+				<TextBlock Grid.Column="1"
+						 Text="{Binding RecycleReason}"
+						 TextWrapping="Wrap"
+						 d:Text="Low value per slot" />
 
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="*" />

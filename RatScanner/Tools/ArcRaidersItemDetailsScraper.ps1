@@ -1,6 +1,7 @@
 param(
     [string]$ItemsPath = (Join-Path $PSScriptRoot "..\Resources\ArcRaidersItems.json"),
     [string]$OutputRecyclePath = (Join-Path $PSScriptRoot "..\Resources\ArcRaidersRecycleValues.json"),
+    [string]$OutputRecycleOutputsPath = (Join-Path $PSScriptRoot "..\Resources\ArcRaidersRecycleOutputs.json"),
     [string]$OutputCraftingPath = (Join-Path $PSScriptRoot "..\Resources\ArcRaidersCraftingKeep.json"),
     [int]$DelayMs = 200
 )
@@ -33,11 +34,24 @@ if (Test-Path $OutputCraftingPath) {
     } catch { }
 }
 
+$existingRecycleOutputs = @{}
+if (Test-Path $OutputRecycleOutputsPath) {
+    try {
+        $existing = Get-Content -Path $OutputRecycleOutputsPath -Raw | ConvertFrom-Json
+        foreach ($prop in $existing.PSObject.Properties) {
+            $existingRecycleOutputs[$prop.Name] = $prop.Value
+        }
+    } catch { }
+}
+
 $recycleMap = @{}
 foreach ($key in $existingRecycle.Keys) { $recycleMap[$key] = $existingRecycle[$key] }
 
 $craftingMap = @{}
 foreach ($key in $existingCrafting.Keys) { $craftingMap[$key] = $existingCrafting[$key] }
+
+$recycleOutputsMap = @{}
+foreach ($key in $existingRecycleOutputs.Keys) { $recycleOutputsMap[$key] = $existingRecycleOutputs[$key] }
 
 foreach ($item in $items) {
     $id = $item.Id
@@ -87,6 +101,48 @@ foreach ($item in $items) {
             $recycleMap[$id] = $totalRecycleValue
         }
 
+        function Parse-RecycleOutputs($details) {
+            $outputs = @()
+            if ($null -eq $details) { return $outputs }
+            foreach ($entry in $details) {
+                if ($null -eq $entry) { continue }
+                $quantity = 1
+                if ($entry.quantity) { $quantity = [int]$entry.quantity }
+
+                $itemNode = $entry.item
+                $outId = $null
+                $outName = $null
+                if ($itemNode) {
+                    $outId = $itemNode.id
+                    $outName = $itemNode.name
+                } else {
+                    $outId = $entry.id
+                    $outName = $entry.name
+                }
+
+                if (-not [string]::IsNullOrWhiteSpace($outId)) {
+                    $outputs += [pscustomobject]@{
+                        Id = $outId
+                        Name = $outName
+                        Quantity = $quantity
+                    }
+                }
+            }
+            return $outputs
+        }
+
+        $recycleOutputs = @()
+        if ($resolved.recycleComponentsDetails) {
+            $recycleOutputs = Parse-RecycleOutputs $resolved.recycleComponentsDetails
+        } elseif ($resolved.item -and $resolved.item.recycle_components_details) {
+            $recycleOutputs = Parse-RecycleOutputs $resolved.item.recycle_components_details
+        } elseif ($resolved.item -and $resolved.item.recycle_components) {
+            $recycleOutputs = Parse-RecycleOutputs $resolved.item.recycle_components
+        }
+        if ($recycleOutputs.Count -gt 0) {
+            $recycleOutputsMap[$id] = $recycleOutputs
+        }
+
         $usedInCount = 0
         if ($resolved.item -and $resolved.item.used_in) {
             $usedInCount = $resolved.item.used_in.Count
@@ -109,5 +165,10 @@ $craftOut = [ordered]@{}
 foreach ($key in ($craftingMap.Keys | Sort-Object)) { $craftOut[$key] = $craftingMap[$key] }
 $craftOut | ConvertTo-Json -Depth 3 | Set-Content -Path $OutputCraftingPath -Encoding UTF8
 
+$recycleOutputsOut = [ordered]@{}
+foreach ($key in ($recycleOutputsMap.Keys | Sort-Object)) { $recycleOutputsOut[$key] = $recycleOutputsMap[$key] }
+$recycleOutputsOut | ConvertTo-Json -Depth 4 | Set-Content -Path $OutputRecycleOutputsPath -Encoding UTF8
+
 Write-Host "Wrote recycle values to $OutputRecyclePath"
+Write-Host "Wrote recycle outputs to $OutputRecycleOutputsPath"
 Write-Host "Wrote crafting keep list to $OutputCraftingPath"

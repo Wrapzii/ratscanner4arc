@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace RatScanner;
 
@@ -41,11 +43,16 @@ public static class ArcItemExtensions {
 			string note = string.IsNullOrWhiteSpace(item.CraftingNote) ? "Crafting material" : item.CraftingNote;
 			return (RecycleDecision.Keep, note);
 		}
+
+		// Prefer recycling if it yields high-usage crafting materials
+		if (TryGetRecycleCraftingOutputs(item, out string recycleCraftingReason)) {
+			return (RecycleDecision.Recycle, recycleCraftingReason);
+		}
 		
 		// If recycle value is known, compare trader vs scrap
 		if (item.RecycleValue > 0) {
 			if (item.RecycleValue > item.Value) {
-				return (RecycleDecision.Recycle, $"Recycle ({item.RecycleValue.AsCredits()} > {item.Value.AsCredits()})");
+				return (RecycleDecision.Recycle, AppendLoadingNote(item, $"Recycle ({item.RecycleValue.AsCredits()} > {item.Value.AsCredits()})"));
 			}
 			if (item.RecycleValue < item.Value) {
 				return (RecycleDecision.Sell, $"Sell ({item.Value.AsCredits()} > {item.RecycleValue.AsCredits()})");
@@ -58,16 +65,74 @@ public static class ArcItemExtensions {
 		
 		// Fallback: use value per slot to determine efficiency
 		int valuePerSlot = item.ValuePerSlot;
-		const int lowValueThreshold = 50;
+		const int lowValueThreshold = 100;
 		if (valuePerSlot < lowValueThreshold) {
-			return (RecycleDecision.Recycle, $"Recycle (low value per slot{heuristicSuffix})");
+			return (RecycleDecision.Recycle, AppendLoadingNote(item, $"Recycle (low value per slot{heuristicSuffix})"));
 		}
 		
-		if (item.Value > 200) {
+		if (item.Value > 500) {
 			return (RecycleDecision.Sell, $"Sell (good value{heuristicSuffix})");
 		}
 		
-		return (RecycleDecision.Recycle, $"Recycle (low overall value{heuristicSuffix})");
+		return (RecycleDecision.Recycle, AppendLoadingNote(item, $"Recycle (low overall value{heuristicSuffix})"));
+	}
+
+	private static string AppendLoadingNote(ArcRaidersData.ArcItem item, string reason) {
+		bool isRecyclable = item.IsRecyclable || item.Category.Equals("Recyclable", StringComparison.OrdinalIgnoreCase);
+		if (!isRecyclable) return reason;
+		if (item.RecycleOutputs != null && item.RecycleOutputs.Count > 0) return reason;
+		return $"{reason} (outputs loading...)";
+	}
+
+	private static bool TryGetRecycleCraftingOutputs(ArcRaidersData.ArcItem item, out string reason) {
+		reason = string.Empty;
+		bool isRecyclable = item.IsRecyclable || item.Category.Equals("Recyclable", StringComparison.OrdinalIgnoreCase);
+		if (!isRecyclable) return false;
+		if (item.RecycleOutputs == null || item.RecycleOutputs.Count == 0) {
+			ArcRaidersData.EnsureRecycleOutputsFor(item.Id);
+			return false;
+		}
+
+		var matches = new List<(ArcRaidersData.RecycleOutput output, ArcRaidersData.ArcItem material)>();
+		foreach (var output in item.RecycleOutputs) {
+			if (string.IsNullOrWhiteSpace(output.Id)) continue;
+			var material = ArcRaidersData.GetItemById(output.Id);
+			if (material == null) continue;
+			if (material.IsCraftingItem || material.IsBaseItem) {
+				matches.Add((output, material));
+			}
+		}
+
+		if (matches.Count == 0) return false;
+
+		string FormatOutput((ArcRaidersData.RecycleOutput output, ArcRaidersData.ArcItem material) entry) {
+			string name = string.IsNullOrWhiteSpace(entry.output.Name) ? entry.material.Name : entry.output.Name!;
+			string quantity = entry.output.Quantity > 1 ? $"{entry.output.Quantity}x " : string.Empty;
+			string note = string.IsNullOrWhiteSpace(entry.material.CraftingNote)
+				? string.Empty
+				: $" ({entry.material.CraftingNote})";
+			return $"{quantity}{name}{note}";
+		}
+
+		const int maxOutputs = 5;
+		var preview = matches.Take(maxOutputs).Select(FormatOutput).ToArray();
+		int remaining = Math.Max(0, matches.Count - preview.Length);
+		var lines = new List<string> { "Recycle for crafting materials:" };
+		for (int i = 0; i < preview.Length; i++) {
+			bool isLast = i == preview.Length - 1 && remaining == 0;
+			string prefix = isLast ? "└─" : "├─";
+			lines.Add($"{prefix} {preview[i]}");
+		}
+		if (remaining > 0) {
+			lines.Add($"└─ +{remaining} more");
+		}
+
+		if (item.RecycleValue > 0 && item.RecycleValue < item.Value) {
+			lines[0] += $" (sell {item.Value.AsCredits()}, recycle {item.RecycleValue.AsCredits()})";
+		}
+
+		reason = string.Join(Environment.NewLine, lines);
+		return true;
 	}
 	
 	/// <summary>

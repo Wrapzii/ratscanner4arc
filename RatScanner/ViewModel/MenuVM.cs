@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Windows;
 
 namespace RatScanner.ViewModel;
 
@@ -52,6 +53,7 @@ internal class MenuVM : INotifyPropertyChanged {
 	public MenuVM(RatScannerMain ratScanner) {
 		DataSource = ratScanner;
 		DataSource.PropertyChanged += ModelPropertyChanged;
+		ArcRaidersData.AuxDataUpdated += OnAuxDataUpdated;
 	}
 
 	protected virtual void OnPropertyChanged(string propertyName = null) {
@@ -59,6 +61,19 @@ internal class MenuVM : INotifyPropertyChanged {
 	}
 
 	public void ModelPropertyChanged(object? sender, PropertyChangedEventArgs e) {
+		OnPropertyChanged();
+	}
+
+	private void OnAuxDataUpdated() {
+		try {
+			var dispatcher = Application.Current?.Dispatcher;
+			if (dispatcher != null && !dispatcher.CheckAccess()) {
+				dispatcher.Invoke(OnPropertyChanged);
+				return;
+			}
+		} catch {
+			// Ignore dispatcher failures
+		}
 		OnPropertyChanged();
 	}
 

@@ -409,8 +409,8 @@ public class RatScannerMain : INotifyPropertyChanged {
 			string captureLabel = "";
 			
 			var vs = SystemInformation.VirtualScreen;
-			int largeWidth = Math.Min(vs.Width, scanWidth * 2);
-			int largeHeight = Math.Min(vs.Height, scanHeight * 2);
+			int largeWidth = Math.Min(vs.Width, scanWidth * 3);
+			int largeHeight = Math.Min(vs.Height, scanHeight * 3);
 			
 			var attempts = new (Vector2 Pos, Size Size, string Label)[] {
 				// bias capture strongly to the right of the cursor since tooltips appear to the right
@@ -422,13 +422,14 @@ public class RatScannerMain : INotifyPropertyChanged {
 				(new Vector2(position.X - scanWidth / 2, position.Y - scanHeight / 2), new Size(scanWidth, scanHeight), "center"),
 				(new Vector2(position.X - scanWidth / 2, position.Y - scanHeight), new Size(scanWidth, scanHeight), "up"),
 				(new Vector2(position.X - scanWidth / 2, position.Y), new Size(scanWidth, scanHeight), "down"),
+				(new Vector2(position.X - largeWidth / 2, position.Y - largeHeight / 2), new Size(largeWidth, largeHeight), "large-center"),
 				(new Vector2(position.X, position.Y - largeHeight / 2), new Size(largeWidth, largeHeight), "large-right")
 			};
 
 			foreach (var attempt in attempts) {
 				Vector2 pos = ClampCaptureToVirtualScreen(attempt.Pos, attempt.Size);
 				Bitmap bmp = GetScreenshot(pos, attempt.Size);
-				if (TryFindTooltipBounds(bmp, out tooltipBounds)) {
+				if (TryFindTooltipBounds(bmp, out tooltipBounds) || TryFindLightTooltipBounds(bmp, out tooltipBounds)) {
 					screenshot = bmp;
 					screenshotPosition = pos;
 					captureLabel = attempt.Label;
@@ -504,18 +505,20 @@ public class RatScannerMain : INotifyPropertyChanged {
 				} catch { /* Ignore debug save errors */ }
 			}
 			
-			// Perform OCR and extract a likely item title.
+			// Perform OCR and extract candidates from ALL OCR text before matching.
+			string ocrTitle = "";
+			string ocrText = "";
 			string titleCandidate = "";
 			if (titleProcessed != null) {
 				using Bitmap titleScaled = UpscaleForOcr(titleProcessed, 2);
-				string ocrTitle = PerformOcr(titleScaled, pageSegMode: PageSegMode.SingleBlock, whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -'");
+				ocrTitle = PerformOcr(titleScaled, pageSegMode: PageSegMode.SingleBlock, whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -'");
 				Logger.LogDebug($"TooltipScan: OCR title result = '{ocrTitle}'");
 				titleCandidate = ExtractTitleFromTitleRegion(ocrTitle);
 				Logger.LogDebug($"TooltipScan: title candidate (title region) = '{titleCandidate}'");
 			}
+			ocrText = PerformOcr(processedImage, pageSegMode: PageSegMode.Auto);
+			Logger.LogDebug($"TooltipScan: OCR result = '{ocrText}'");
 			if (string.IsNullOrWhiteSpace(titleCandidate)) {
-				string ocrText = PerformOcr(processedImage, pageSegMode: PageSegMode.Auto);
-				Logger.LogDebug($"TooltipScan: OCR result = '{ocrText}'");
 				titleCandidate = ExtractLikelyItemTitle(ocrText);
 				Logger.LogDebug($"TooltipScan: title candidate (text region) = '{titleCandidate}'");
 			}
@@ -528,11 +531,10 @@ public class RatScannerMain : INotifyPropertyChanged {
 			ArcRaidersData.ArcItem ocrItem = new();
 			float ocrConfidence = 0f;
 			bool ocrFuzzy = false;
-			if (!string.IsNullOrWhiteSpace(titleCandidate)) {
-				hasOcrMatch = TryMatchItemByName(titleCandidate, out ocrItem, out ocrConfidence, out ocrFuzzy);
-				if (hasOcrMatch) {
-					Logger.LogDebug($"TooltipScan: OCR matched '{ocrItem.Name}' (conf: {ocrConfidence:0.00}, fuzzy: {ocrFuzzy})");
-				}
+			string matchedOcrLine = "";
+			hasOcrMatch = TryMatchItemFromOcr(ocrTitle, ocrText, out ocrItem, out ocrConfidence, out ocrFuzzy, out matchedOcrLine);
+			if (hasOcrMatch) {
+				Logger.LogDebug($"TooltipScan: OCR matched '{ocrItem.Name}' (conf: {ocrConfidence:0.00}, fuzzy: {ocrFuzzy}, line: '{matchedOcrLine}')");
 			}
 
 			// Try icon hash match with debugging
@@ -565,12 +567,15 @@ public class RatScannerMain : INotifyPropertyChanged {
 				}
 			}
 
+			if (screenshot == null) return;
+			if (tooltipBounds == System.Drawing.Rectangle.Empty) return;
 			if (hasResult) {
 				Vector2 tooltipPosition = new(
-					screenshotPosition.X + tooltipBounds.Left,
-					screenshotPosition.Y + tooltipBounds.Top
+					screenshotPosition!.X + tooltipBounds.Left,
+					screenshotPosition!.Y + tooltipBounds.Top
 				);
-				TooltipScan scan = new(finalItem, tooltipPosition, finalConfidence, titleCandidate, finalFuzzy);
+				string rawOcr = string.IsNullOrWhiteSpace(matchedOcrLine) ? titleCandidate : matchedOcrLine;
+				TooltipScan scan = new(finalItem, tooltipPosition, finalConfidence, rawOcr, finalFuzzy);
 				ItemScans.Enqueue(scan);
 				Logger.LogDebug($"TooltipScan: SUCCESS - Final result: '{finalItem.Name}'");
 				RefreshOverlay();
@@ -689,7 +694,7 @@ public class RatScannerMain : INotifyPropertyChanged {
 			if (bestCount == 0) return false;
 			bounds = bestBounds;
 			// Expand slightly to include header/badges
-			bounds.Inflate(8, 8);
+			bounds.Inflate(10, 14);
 			bounds = System.Drawing.Rectangle.Intersect(bounds, new System.Drawing.Rectangle(0, 0, width, height));
 
 			// Extend right edge if beige background continues (prevents cropping the name)
@@ -717,10 +722,117 @@ public class RatScannerMain : INotifyPropertyChanged {
 			if (extendRight > bounds.Right) {
 				bounds = System.Drawing.Rectangle.FromLTRB(bounds.Left, bounds.Top, Math.Min(width, extendRight + 1), bounds.Bottom);
 			}
-			if (bounds.Width < 120 || bounds.Height < 90) return false;
-			if (bounds.Width > 900 || bounds.Height > 1000) return false;
+			if (bounds.Width < 120 || bounds.Height < 70) return false;
+			if (bounds.Width > 1100 || bounds.Height > 1000) return false;
 			float ratio = bounds.Width / (float)bounds.Height;
-			if (ratio > 2.0f) return false;
+			if (ratio > 3.2f) return false;
+
+			return true;
+		} finally {
+			bitmap.UnlockBits(bmpData);
+		}
+	}
+
+	/// <summary>
+	/// Fallback: find large, bright tooltip rectangle (near-white) when beige detection fails.
+	/// </summary>
+	private static bool TryFindLightTooltipBounds(Bitmap bitmap, out System.Drawing.Rectangle bounds) {
+		bounds = System.Drawing.Rectangle.Empty;
+		int width = bitmap.Width;
+		int height = bitmap.Height;
+
+		BitmapData bmpData = bitmap.LockBits(
+			new System.Drawing.Rectangle(0, 0, width, height),
+			ImageLockMode.ReadOnly,
+			PixelFormat.Format24bppRgb);
+
+		try {
+			int stride = bmpData.Stride;
+			int bytesPerPixel = 3;
+			int byteCount = stride * height;
+			byte[] pixels = new byte[byteCount];
+			System.Runtime.InteropServices.Marshal.Copy(bmpData.Scan0, pixels, 0, byteCount);
+
+			bool IsLightBg(int x, int y) {
+				int offset = y * stride + x * bytesPerPixel;
+				byte b = pixels[offset];
+				byte g = pixels[offset + 1];
+				byte r = pixels[offset + 2];
+				int max = Math.Max(r, Math.Max(g, b));
+				int min = Math.Min(r, Math.Min(g, b));
+				int lum = (r * 299 + g * 587 + b * 114) / 1000;
+				return lum >= 210 && (max - min) <= 22;
+			}
+
+			bool[] visited = new bool[width * height];
+			Queue<int> q = new();
+
+			int bestCount = 0;
+			double bestScore = double.NegativeInfinity;
+			System.Drawing.Rectangle bestBounds = System.Drawing.Rectangle.Empty;
+
+			int startX = Math.Max(0, (int)(width * 0.4));
+			for (int y0 = 20; y0 < height - 20; y0 += 4) {
+				for (int x0 = width - 2; x0 >= startX; x0 -= 3) {
+					int idx0 = y0 * width + x0;
+					if (visited[idx0]) continue;
+					if (!IsLightBg(x0, y0)) continue;
+
+					int minX = x0, minY = y0, maxX = x0, maxY = y0;
+					int count = 0;
+					long sumX = 0;
+
+					q.Enqueue(idx0);
+					visited[idx0] = true;
+
+					while (q.Count > 0) {
+						int idx = q.Dequeue();
+						int y = idx / width;
+						int x = idx - y * width;
+
+						count++;
+						sumX += x;
+						if (x < minX) minX = x;
+						if (y < minY) minY = y;
+						if (x > maxX) maxX = x;
+						if (y > maxY) maxY = y;
+
+						void EnqueueIf(int nx, int ny) {
+							if (nx < 0 || ny < 0 || nx >= width || ny >= height) return;
+							int nidx = ny * width + nx;
+							if (visited[nidx]) return;
+							if (!IsLightBg(nx, ny)) return;
+							visited[nidx] = true;
+							q.Enqueue(nidx);
+						}
+
+						EnqueueIf(x + 1, y);
+						EnqueueIf(x - 1, y);
+						EnqueueIf(x, y + 1);
+						EnqueueIf(x, y - 1);
+					}
+
+					if (count < 1500) continue;
+					double centerX = sumX / (double)count;
+					double rightBias = centerX / width;
+					double score = count * (0.6 + rightBias);
+					if (score > bestScore) {
+						bestScore = score;
+						bestCount = count;
+						bestBounds = System.Drawing.Rectangle.FromLTRB(minX, minY, maxX + 1, maxY + 1);
+					}
+				}
+			}
+
+			if (bestCount == 0) return false;
+			bounds = bestBounds;
+			bounds.Inflate(10, 14);
+			bounds = System.Drawing.Rectangle.Intersect(bounds, new System.Drawing.Rectangle(0, 0, width, height));
+
+			if (bounds.Width < 120 || bounds.Height < 70) return false;
+			if (bounds.Width > 1400 || bounds.Height > 1200) return false;
+			float ratio = bounds.Width / (float)bounds.Height;
+			if (ratio > 3.2f) return false;
 
 			return true;
 		} finally {
@@ -1138,6 +1250,58 @@ public class RatScannerMain : INotifyPropertyChanged {
 		return candidate.Length >= 3 ? candidate : bestLine;
 	}
 
+	private static IEnumerable<string> ExtractOcrCandidateLines(params string[] ocrTexts) {
+		HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+		foreach (string text in ocrTexts) {
+			if (string.IsNullOrWhiteSpace(text)) continue;
+			string[] lines = text
+				.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
+				.Select(l => l.Trim())
+				.Where(l => l.Length > 0)
+				.ToArray();
+			foreach (string line in lines) {
+				string cleaned = Regex.Replace(line, @"[^A-Za-z0-9\s\-']", " ");
+				cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
+				if (cleaned.Length < 3) continue;
+				if (seen.Add(cleaned)) yield return cleaned;
+			}
+		}
+	}
+
+	private static bool IsCategoryClassifierLine(string line) {
+		if (string.IsNullOrWhiteSpace(line)) return false;
+		string cleaned = Regex.Replace(line, @"[^A-Za-z0-9\s\-']", " ");
+		cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
+		if (cleaned.Length == 0) return false;
+		string lower = cleaned.ToLowerInvariant();
+		bool hasRarity = Regex.IsMatch(lower, @"\b(common|uncommon|rare|epic|legendary|mythic)\b");
+		bool hasCategory = Regex.IsMatch(lower, @"\b(lmg|smg|ar|rifle|shotgun|pistol|sniper|ammo|magazine|armor|helmet|backpack|equipment|tool|resource|consumable|category)\b");
+		int wordCount = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+		return hasRarity && (hasCategory || wordCount <= 3);
+	}
+
+	private static bool TryMatchItemFromOcr(string ocrTitle, string ocrText, out ArcRaidersData.ArcItem matchedItem, out float confidence, out bool isFuzzyMatch, out string matchedLine) {
+		matchedItem = new ArcRaidersData.ArcItem();
+		confidence = 0f;
+		isFuzzyMatch = false;
+		matchedLine = "";
+
+		bool found = false;
+		foreach (string candidate in ExtractOcrCandidateLines(ocrTitle, ocrText)) {
+			if (IsCategoryClassifierLine(candidate)) continue;
+			if (!TryMatchItemByName(candidate, out ArcRaidersData.ArcItem item, out float conf, out bool fuzzy)) continue;
+			if (!found || conf > confidence) {
+				matchedItem = item;
+				confidence = conf;
+				isFuzzyMatch = fuzzy;
+				matchedLine = candidate;
+				found = true;
+			}
+		}
+
+		return found;
+	}
+
 	private static string ExtractTitleFromTitleRegion(string ocrText) {
 		if (string.IsNullOrWhiteSpace(ocrText)) return "";
 		string[] lines = ocrText
@@ -1156,6 +1320,7 @@ public class RatScannerMain : INotifyPropertyChanged {
 			double ratio = letters == 0 ? 0 : (double)upper / letters;
 			// Title line is usually uppercase-heavy; description is lower-case heavy.
 			if (ratio < 0.55) continue;
+			if (IsCategoryClassifierLine(cleaned)) continue;
 			return cleaned;
 		}
 
@@ -1171,6 +1336,7 @@ public class RatScannerMain : INotifyPropertyChanged {
 		isFuzzyMatch = false;
 		
 		if (string.IsNullOrWhiteSpace(ocrText)) return false;
+		if (IsCategoryClassifierLine(ocrText)) return false;
 		
 		string normalizedOcr = NormalizeItemName(ocrText);
 		Logger.LogDebug($"TryMatchItemByName: normalized OCR = '{normalizedOcr}'");

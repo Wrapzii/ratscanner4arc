@@ -82,7 +82,7 @@
                                     _ => "SELL"
                                 };
                             }
-                            <div class="d-flex align-center stroke" style="@($"color: {recycleColor};")">
+                            <div class="d-flex align-center stroke" style="@($"color: {recycleColor};")" title="@recycleRec.reason">
                                 <MudIcon Icon="@Icons.Material.Filled.Recycling" Size="Size.Small" Class="mr-1" /> @recycleLabel
                             </div>
                         </div>
@@ -146,8 +146,8 @@
                             _ => "SELL"
                         };
                     }
-                    <MudIcon Icon="@Icons.Material.Filled.Recycling" Size="Size.Small" Class="ml-1" style="@($"color: {recycleColor};")" />
-                    <span class="ml-1 stroke" style="@($"color: {recycleColor};")">@recycleLabel</span>
+                    <MudIcon Icon="@Icons.Material.Filled.Recycling" Size="Size.Small" Class="ml-1" style="@($"color: {recycleColor};")" title="@recycleRec.reason" />
+                    <span class="ml-1 stroke" style="@($"color: {recycleColor};")" title="@recycleRec.reason">@recycleLabel</span>
                 </div>
             }
         }
