@@ -281,29 +281,6 @@ public class RatScannerMain : INotifyPropertyChanged {
 			});
 		}
 		
-		// RatStash library is designed for Escape from Tarkov and may try to access
-		// Tarkov game files. Create a minimal fake Graphics.ini to prevent errors.
-		try {
-			string tarkovSettingsPath = Path.Combine(
-				Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-				"Battlestate Games", "Escape From Tarkov", "Settings");
-			string graphicsIniPath = Path.Combine(tarkovSettingsPath, "Graphics.ini");
-			
-			if (!File.Exists(graphicsIniPath)) {
-				Logger.LogDebug($"Creating minimal Graphics.ini at {graphicsIniPath} to satisfy RatStash library");
-				Directory.CreateDirectory(tarkovSettingsPath);
-				// Write minimal Graphics.ini with screen resolution
-				string iniContent = $@"[Graphics]
-ScreenWidth={RatConfig.ScreenWidth}
-ScreenHeight={RatConfig.ScreenHeight}
-FullScreenMode=0
-";
-				File.WriteAllText(graphicsIniPath, iniContent);
-			}
-		} catch (Exception e) {
-			Logger.LogDebug($"Could not create Graphics.ini workaround: {e.Message}");
-		}
-		
 		return RatStash.Database.FromItems(rsItems);
 	}
 
