@@ -7,6 +7,8 @@ using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using System.Windows;
+using Velopack;
+using Velopack.Sources;
 
 namespace RatScanner;
 
@@ -14,6 +16,10 @@ namespace RatScanner;
 /// Interaction logic for App.xaml
 /// </summary>
 public partial class App : Application, ISingleInstance {
+	public App() {
+		VelopackApp.Build().Run();
+	}
+
 	private readonly string[] _webview2RegKeys = new[]
 	{
 		@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
@@ -30,11 +36,17 @@ public partial class App : Application, ISingleInstance {
 			return;
 		}
 
+		// Check for updates in the background
+		Task.Run(() => CheckForUpdates());
+
 		new SplashScreen("Resources\\RatLogoMedium.png").Show(true, true);
 		base.OnStartup(e);
 
 		// Set current working directory to executable location
 		Directory.SetCurrentDirectory(AppDomain.CurrentDomain.BaseDirectory);
+
+        // Perform cleanup
+        CleanDebugFolder();
 
 #if !DEBUG
 		SetupExceptionHandling();
@@ -118,5 +130,44 @@ public partial class App : Application, ISingleInstance {
 	private void LogUnhandledException(Exception exception, string source) {
 		exception.Data.Add("Source", source);
 		Logger.LogError(exception);
+	}
+
+		private static void CleanDebugFolder() {
+		try {
+			if (Directory.Exists(RatConfig.Paths.Debug)) {
+				DirectoryInfo di = new(RatConfig.Paths.Debug);
+				foreach (FileInfo file in di.GetFiles()) {
+					try {
+						file.Delete();
+					} catch { } 
+				}
+				foreach (DirectoryInfo dir in di.GetDirectories()) {
+					try {
+						dir.Delete(true);
+					} catch { }
+				}
+			}
+		} catch { }
+	}
+
+	private async Task CheckForUpdates() {
+		try {
+			// TODO: Configure your update source here. examples:
+			// var mgr = new UpdateManager("https://the.place/you-host/updates");
+			// var mgr = new UpdateManager(new GithubSource("https://github.com/YourAccount/YourRepo", null, false));
+			
+			// Assuming GitHub source based on workspace path, PLEASE UPDATE THIS:
+			var source = new GithubSource("https://github.com/ratscanner4arc/RatScanner", null, false);
+			var mgr = new UpdateManager(source);
+
+			var newVersion = await mgr.CheckForUpdatesAsync();
+			if (newVersion == null)
+				return; // no update available
+
+			await mgr.DownloadUpdatesAsync(newVersion);
+			mgr.ApplyUpdatesAndRestart(newVersion);
+		} catch (Exception ex) {
+			Logger.LogError("Update check failed", ex);
+		}
 	}
 }

@@ -105,14 +105,7 @@ internal static class RatConfig {
 	}
 
 	// Other
-#if DEBUG
-	internal static bool LogDebug {
-		get => true;
-		set { }
-	}
-#else
 	internal static bool LogDebug = false;
-#endif
 	internal static bool MinimizeToTray = false;
 	internal static bool AlwaysOnTop = true;
 	private static int ConfigVersion => 2;

@@ -100,7 +100,7 @@ public class RatScannerMain : INotifyPropertyChanged {
 			CheckForUpdates();
 
 			Logger.LogInfo("Setting up timer routines...");
-			_scanRefreshTimer = new Timer(RefreshOverlay, null, 1000, 100);
+			_scanRefreshTimer = new Timer(RefreshOverlay, null, 1000, 500);
 
 			Logger.LogInfo("Enabling hotkeys...");
 			HotkeyManager.RegisterHotkeys();
