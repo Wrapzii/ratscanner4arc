@@ -593,12 +593,15 @@ FullScreenMode=0
 			}
 
 			if (screenshot == null) return;
-			if (tooltipBounds == System.Drawing.Rectangle.Empty) return;
+			// if (tooltipBounds == System.Drawing.Rectangle.Empty) return; // Allow result even if bounds logic was weird, though logic above requires bounds to set hasResult essentially via OCR text region checks mostly.
+            // Actually, hasResult is set if OCR or Icon or Hash matched.
+            
 			if (hasResult) {
-				Vector2 tooltipPosition = new(
-					screenshotPosition!.X + tooltipBounds.Left,
-					screenshotPosition!.Y + tooltipBounds.Top
-				);
+				// Use the cursor position for the overlay instead of the detected tooltip position.
+				// This ensures the overlay is always visible near where the user clicked/hovered.
+				// Offset slightly (15px) to not obstruct the mouse cursor.
+				Vector2 tooltipPosition = new(clickPosition.X + 15, clickPosition.Y + 15);
+
 				string rawOcr = string.IsNullOrWhiteSpace(matchedOcrLine) ? titleCandidate : matchedOcrLine;
 				TooltipScan scan = new(finalItem, tooltipPosition, finalConfidence, rawOcr, finalFuzzy);
 				ItemScans.Enqueue(scan);

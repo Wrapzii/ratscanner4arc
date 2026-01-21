@@ -91,64 +91,61 @@
             }
             else
             {
-                <div class="d-flex align-enter" style="position: absolute;
-	                                                   left: @(itemScan.GetToolTipPosition().X - VirtualScreenOffset.XOffset)px;
-	                                                   top: @(itemScan.GetToolTipPosition().Y - VirtualScreenOffset.YOffset)px;
-	                                                   background: #121212; padding: 4px;">
+                var leftPos = itemScan.GetToolTipPosition().X - VirtualScreenOffset.XOffset;
+                var topPos = itemScan.GetToolTipPosition().Y - VirtualScreenOffset.YOffset;
 
-                    @if (!string.IsNullOrWhiteSpace(itemScan.IconPath))
-                    {
-                        <img src="@GetIconURLFromPath(itemScan.IconPath, item.ImageLink ?? "")" style="width: 48px; height: 48px; margin-right: 6px;" />
-                    }
+                <MudPaper Elevation="4" Style="@($"position: absolute; left: {leftPos}px; top: {topPos}px; background-color: rgba(30, 30, 30, 0.95); max-width: 300px; border: 1px solid #495154; z-index: 9999;")" Class="pa-2 rounded">
+                    <MudStack Spacing="1">
+                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                             @if (!string.IsNullOrWhiteSpace(itemScan.IconPath))
+                             {
+                                 <img src="@GetIconURLFromPath(itemScan.IconPath, item.ImageLink ?? "")" style="width: 48px; height: 48px; object-fit: contain;" />
+                             }
+                             <MudStack Spacing="0">
+                                 <MudText Typo="Typo.subtitle2" Style="font-weight: bold; color: white;">@item.Name</MudText>
+                                 @if (!string.IsNullOrWhiteSpace(item.Rarity))
+                                 {
+                                     <MudText Typo="Typo.caption" Style="color: #bdbdbd;">@item.Rarity</MudText>
+                                 }
+                             </MudStack>
+                         </MudStack>
 
-                    @if (SettingsVM.LogDebug && !string.IsNullOrWhiteSpace(item.Name))
-                    {
-                        <div class="stroke">
-                            @item.Name
-                        </div>
-                    }
+                        <MudDivider Class="my-1" />
 
-                    @if (item.Value > 0)
-                    {
-                        <div class="stroke">
-                            @item.Value.AsCredits()
-                        </div>
-                    }
-                    @if (item.ValuePerSlot > 0)
-                    {
-                        <div class="stroke">
-                            @item.ValuePerSlot.AsCredits()
-                            <span class="ml-1">/ slot</span>
-                        </div>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(item.Rarity))
-                    {
-                        <div class="stroke">
-                            @item.Rarity
-                        </div>
-                    }
-                    @if (item.Weight > 0)
-                    {
-                        <div class="stroke">
-                            @item.Weight.ToString("0.##") kg
-                        </div>
-                    }
-                    @{
-                        var recycleRec = item.GetRecycleRecommendation();
-                        var recycleColor = recycleRec.decision switch {
-                            RecycleDecision.Recycle => "#ff9800",
-                            RecycleDecision.Keep => "#4caf50",
-                            _ => "#bdbdbd"
-                        };
-                        var recycleLabel = recycleRec.decision switch {
-                            RecycleDecision.Recycle => "RECYCLE",
-                            RecycleDecision.Keep => "KEEP",
-                            _ => "SELL"
-                        };
-                    }
-                    <MudIcon Icon="@Icons.Material.Filled.Recycling" Size="Size.Small" Class="ml-1" style="@($"color: {recycleColor};")" title="@recycleRec.reason" />
-                    <span class="ml-1 stroke" style="@($"color: {recycleColor};")" title="@recycleRec.reason">@recycleLabel</span>
-                </div>
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                             <MudText Typo="Typo.body1" Style="color: #bdbdbd;">Value:</MudText>
+                             <MudText Typo="Typo.h6" Style="font-weight: bold; color: #FFD700;">@item.Value.AsCredits()</MudText>
+                        </MudStack>
+                        
+                        @if (item.Weight > 0)
+                        {
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                 <MudText Typo="Typo.body2" Style="color: #bdbdbd;">Weight:</MudText>
+                                 <MudText Typo="Typo.body2" Style="color: white;">@item.Weight.ToString("0.##") kg</MudText>
+                            </MudStack>
+                        }
+
+                        @{
+                             var recycleRec = item.GetRecycleRecommendation();
+                             var recycleColor = recycleRec.decision switch {
+                                 RecycleDecision.Recycle => "#ff9800",
+                                 RecycleDecision.Keep => "#4caf50",
+                                 _ => "#D32F2F"
+                             };
+                             var recycleLabel = recycleRec.decision switch {
+                                 RecycleDecision.Recycle => "RECYCLE",
+                                 RecycleDecision.Keep => "KEEP",
+                                 _ => "SELL"
+                             };
+                             var recycleReason = recycleRec.reason ?? "";
+                         }
+                         
+                         <MudAlert Class="mt-1 py-1" Severity="Severity.Normal" Variant="Variant.Filled" Style="@($"background-color: {recycleColor}; color: {(recycleRec.decision == RecycleDecision.Recycle ? "black" : "white")}; font-weight: bold;")" Icon="@Icons.Material.Filled.Recycling">
+                            @recycleLabel @(string.IsNullOrEmpty(recycleReason) ? "" : $"- {recycleReason}")
+                         </MudAlert>
+
+                    </MudStack>
+                </MudPaper>
             }
         }
     }
