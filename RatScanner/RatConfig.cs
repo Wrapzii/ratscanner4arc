@@ -54,13 +54,13 @@ internal static class RatConfig {
 
 	// Icon Scan options
 	internal static class IconScan {
-		internal static bool Enable = true;
+		internal static bool Enable = false;
 		internal static float ConfWarnThreshold = 0.8f;
 		internal static bool ScanRotatedIcons = true;
 		internal static int ScanWidth => (int)(GameScale * 896);
 		internal static int ScanHeight => (int)(GameScale * 896);
 		internal static int SelectionScanSize => (int)(GameScale * 700);
-		internal static Hotkey Hotkey = new(new[] { Key.LeftShift }.ToList(), new[] { MouseButton.Left });
+		internal static Hotkey Hotkey = new();
 		internal static bool UseCachedIcons = true;
 	}
 

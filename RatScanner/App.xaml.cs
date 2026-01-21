@@ -157,7 +157,7 @@ public partial class App : Application, ISingleInstance {
 			// var mgr = new UpdateManager(new GithubSource("https://github.com/YourAccount/YourRepo", null, false));
 			
 			// Assuming GitHub source based on workspace path, PLEASE UPDATE THIS:
-			var source = new GithubSource("https://github.com/ratscanner4arc/RatScanner", null, false);
+			var source = new GithubSource("https://github.com/Wrapzii/ratscanner4arc", null, false);
 			var mgr = new UpdateManager(source);
 
 			var newVersion = await mgr.CheckForUpdatesAsync();
