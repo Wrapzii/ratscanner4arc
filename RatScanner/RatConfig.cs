@@ -157,6 +157,10 @@ internal static class RatConfig {
 		IconScan.ScanRotatedIcons = config.ReadBool(nameof(IconScan.ScanRotatedIcons), IconScan.ScanRotatedIcons);
 		IconScan.Hotkey = config.ReadHotkey(nameof(IconScan.Hotkey), IconScan.Hotkey);
 		IconScan.UseCachedIcons = config.ReadBool(nameof(IconScan.UseCachedIcons), IconScan.UseCachedIcons);
+		if (IconScan.Hotkey.KeyboardKeys.Contains(Key.LeftShift) && IconScan.Hotkey.MouseButtons.Contains(MouseButton.Left)) {
+			IconScan.Hotkey = new Hotkey();
+			IconScan.Enable = false;
+		}
 
 		config.Section = nameof(TooltipScan);
 		TooltipScan.Enable = config.ReadBool(nameof(TooltipScan.Enable), TooltipScan.Enable);

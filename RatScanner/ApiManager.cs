@@ -59,6 +59,10 @@ public static class ApiManager {
 	}
 
 	public static string GetResource(ResourceType resource) {
+		// Override GitHub links to point to the new repository
+		if (resource == ResourceType.GithubLink) return "https://github.com/Wrapzii/ratscanner4arc";
+		if (resource == ResourceType.DownloadLink) return "https://github.com/Wrapzii/ratscanner4arc/releases";
+		
 		if (ResCache.ContainsKey(resource)) return ResCache[resource];
 
 		string resPath = resource.GetResourcePath();

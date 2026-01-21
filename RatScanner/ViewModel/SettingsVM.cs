@@ -9,11 +9,6 @@ internal class SettingsVM : INotifyPropertyChanged {
 	public bool EnableAutoNameScan { get; set; }
 	public int NameScanLanguage { get; set; }
 
-	public bool EnableIconScan { get; set; }
-	public bool ScanRotatedIcons { get; set; }
-	public bool UseCachedIcons { get; set; }
-	public Hotkey IconScanHotkey { get; set; }
-
 	public bool EnableTooltipScan { get; set; }
 	public Hotkey TooltipScanHotkey { get; set; }
 
@@ -48,11 +43,6 @@ internal class SettingsVM : INotifyPropertyChanged {
 		EnableNameScan = RatConfig.NameScan.Enable;
 		EnableAutoNameScan = RatConfig.NameScan.EnableAuto;
 		NameScanLanguage = (int)RatConfig.NameScan.Language;
-
-		EnableIconScan = RatConfig.IconScan.Enable;
-		ScanRotatedIcons = RatConfig.IconScan.ScanRotatedIcons;
-		UseCachedIcons = RatConfig.IconScan.UseCachedIcons;
-		IconScanHotkey = RatConfig.IconScan.Hotkey;
 
 		EnableTooltipScan = RatConfig.TooltipScan.Enable;
 		TooltipScanHotkey = RatConfig.TooltipScan.Hotkey;
@@ -90,11 +80,6 @@ internal class SettingsVM : INotifyPropertyChanged {
 		RatConfig.NameScan.Enable = EnableNameScan;
 		RatConfig.NameScan.EnableAuto = EnableAutoNameScan;
 		RatConfig.NameScan.Language = (Language)NameScanLanguage;
-
-		RatConfig.IconScan.Enable = EnableIconScan;
-		RatConfig.IconScan.ScanRotatedIcons = ScanRotatedIcons;
-		RatConfig.IconScan.UseCachedIcons = UseCachedIcons;
-		RatConfig.IconScan.Hotkey = IconScanHotkey;
 
 		RatConfig.TooltipScan.Enable = EnableTooltipScan;
 		RatConfig.TooltipScan.Hotkey = TooltipScanHotkey;

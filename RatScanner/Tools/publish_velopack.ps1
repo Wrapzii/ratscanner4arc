@@ -1,3 +1,8 @@
+param (
+    [string]$SetVersion,
+    [switch]$AutoIncrement
+)
+
 $ErrorActionPreference = "Stop"
 
 # Configuration
@@ -16,11 +21,55 @@ try {
 
 # 2. Get Version from csproj
 $xml = [xml](Get-Content $projectPath)
-$version = $xml.Project.PropertyGroup.Version
-if ([string]::IsNullOrWhiteSpace($version)) {
-    $version = "1.0.0"
+
+# Function to get the correct PropertyGroup
+function Get-VersionPropertyGroup {
+    param($ProjectXml)
+    $groups = $ProjectXml.Project.PropertyGroup
+    foreach ($group in $groups) {
+        if ($group.Version) {
+            return $group
+        }
+    }
+    # Fallback to first group if no version found
+    if ($groups -is [array]) { return $groups[0] }
+    return $groups
 }
-Write-Host "Detected Version: $version" -ForegroundColor Cyan
+
+$propGroup = Get-VersionPropertyGroup -ProjectXml $xml
+$currentVersion = $propGroup.Version
+
+if ([string]::IsNullOrWhiteSpace($currentVersion)) {
+    $currentVersion = "1.0.0"
+}
+
+if ($SetVersion) {
+    $version = $SetVersion
+    Write-Host "Setting Version to: $version" -ForegroundColor Cyan
+    $propGroup.Version = $version
+    $xml.Save($projectPath)
+}
+elseif ($AutoIncrement) {
+    # Parse version
+    try {
+        $v = [version]$currentVersion
+        # Increment Build (3rd digit)
+        $newV = [version]::new($v.Major, $v.Minor, $v.Build + 1)
+        $version = $newV.ToString()
+        
+        Write-Host "Auto-Incrementing Version: $currentVersion -> $version" -ForegroundColor Cyan
+        $propGroup.Version = $version
+        $xml.Save($projectPath)
+    }
+    catch {
+        Write-Warning "Could not parse or increment version '$currentVersion'. using unmodified."
+        $version = $currentVersion
+    }
+}
+else {
+    $version = $currentVersion
+    Write-Host "Using Current Version: $version" -ForegroundColor Cyan
+}
 
 # 3. Publish
 Write-Host "Publishing Application..." -ForegroundColor Cyan
@@ -32,3 +81,6 @@ Write-Host "Packing Release..." -ForegroundColor Cyan
 vpk pack --packId $packId --packVersion $version --packDir $publishDir --mainExe $mainExe
 
 Write-Host "Done! Releases are in the Releases folder." -ForegroundColor Green
+Write-Host "Please upload the following files to your GitHub Release:" -ForegroundColor Yellow
+Get-ChildItem -Path "Releases" | ForEach-Object { Write-Host " - $($_.Name)" }
+Write-Host "IMPORTANT: Do NOT rename these files. Upload them exactly as they are." -ForegroundColor Red

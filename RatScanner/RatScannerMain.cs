@@ -642,7 +642,6 @@ public class RatScannerMain : INotifyPropertyChanged {
 			int bestCount = 0;
 			double bestScore = double.NegativeInfinity;
 			System.Drawing.Rectangle bestBounds = System.Drawing.Rectangle.Empty;
-
 			int startX = Math.Max(0, (int)(width * 0.5));
 			for (int y0 = 20; y0 < height - 20; y0 += 4) {
 				for (int x0 = width - 2; x0 >= startX; x0 -= 3) {
