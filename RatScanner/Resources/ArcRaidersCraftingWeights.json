@@ -1,0 +1,15 @@
+{
+  "keepScoreThreshold": 6,
+  "recycleOutputScoreThreshold": 6,
+  "itemWeights": {
+    "advanced-arc-powercell": 6,
+    "arc-powercell": 4,
+    "processor": 6,
+    "metal-parts": 3,
+    "mechanical-components": 3,
+    "advanced-mechanical-components": 5,
+    "simple-gun-parts": 3,
+    "rubber-parts": 5,
+    "rubber-parts-recipe": 5
+  }
+}

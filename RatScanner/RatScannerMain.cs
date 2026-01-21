@@ -62,6 +62,7 @@ public class RatScannerMain : INotifyPropertyChanged {
 	internal RatEyeEngine RatEyeEngine;
 	private Dictionary<string, ulong>? _iconHashes;
 	private readonly object _iconHashLock = new();
+	private static readonly System.Drawing.Color IconHashBackground = System.Drawing.Color.FromArgb(24, 28, 40);
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -428,7 +429,7 @@ FullScreenMode=0
 			int scanHeight = RatConfig.TooltipScan.ScanHeight;
 			
 			Bitmap? screenshot = null;
-			Vector2 screenshotPosition = default;
+			Vector2? screenshotPosition = null;
 			System.Drawing.Rectangle tooltipBounds = System.Drawing.Rectangle.Empty;
 			string captureLabel = "";
 			
@@ -938,7 +939,7 @@ FullScreenMode=0
 					if (inner.Width <= 0 || inner.Height <= 0) continue;
 
 					Bitmap iconCrop = screenshot.Clone(inner, PixelFormat.Format24bppRgb);
-					ulong hash = ComputeDHash(iconCrop);
+					ulong hash = ComputeIconHash(iconCrop);
 
 					foreach (var entry in _iconHashes) {
 						int distance = HammingDistance(hash, entry.Value);
@@ -1725,14 +1726,15 @@ FullScreenMode=0
 	}
 
 	private static ulong ComputeIconHash(Bitmap bitmap) {
-		using Bitmap edge = CreateEdgeMap(bitmap);
+		using Bitmap edge = CreateEdgeMap(bitmap, IconHashBackground);
 		return ComputeDHash(edge);
 	}
 
-	private static Bitmap CreateEdgeMap(Bitmap src) {
+	private static Bitmap CreateEdgeMap(Bitmap src, System.Drawing.Color background) {
 		using Bitmap resized = new(64, 64, PixelFormat.Format24bppRgb);
 		using (Graphics gfx = Graphics.FromImage(resized)) {
 			gfx.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
+			gfx.Clear(background);
 			gfx.DrawImage(src, 0, 0, 64, 64);
 		}
 

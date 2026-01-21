@@ -19,6 +19,7 @@ public static class ArcRaidersData {
 	private static DateTime LastOverrideReloadUtc = DateTime.MinValue;
 	private static readonly object RecycleFetchLock = new();
 	private static readonly HashSet<string> PendingRecycleOutputFetches = new(StringComparer.OrdinalIgnoreCase);
+	private static CraftingWeightsConfig? CraftingWeights;
 	
 	/// <summary>
 	/// Simplified item class for Arc Raiders with hardcoded values
@@ -37,6 +38,8 @@ public static class ArcRaidersData {
 		public bool IsRecyclable { get; set; } = false;
 		public bool IsCraftingItem { get; set; } = false;
 		public string? CraftingNote { get; set; }
+		public int UsedInCount { get; set; } = 0;
+		public bool HasCraftingUsageData { get; set; } = false;
 		public string Rarity { get; set; } = "";
 		public double Weight { get; set; } = 0;
 		public string? ImageLink { get; set; }
@@ -51,6 +54,12 @@ public static class ArcRaidersData {
 		public string Id { get; set; } = "";
 		public string? Name { get; set; }
 		public int Quantity { get; set; } = 1;
+	}
+
+	public class CraftingWeightsConfig {
+		public int KeepScoreThreshold { get; set; } = 6;
+		public int RecycleOutputScoreThreshold { get; set; } = 6;
+		public Dictionary<string, int> ItemWeights { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 	}
 	
 	/// <summary>
@@ -77,6 +86,7 @@ public static class ArcRaidersData {
 
 			ApplyRecycleValueOverrides(items);
 			ApplyRecycleOutputOverrides(items);
+			ApplyCraftingUsageOverrides(items);
 			ApplyCraftingKeepOverrides(items);
 			EnsureAuxData(items);
 			EnsureOverrideWatchers();
@@ -90,6 +100,8 @@ public static class ArcRaidersData {
 	private static string GetRecycleOverridesPath() => Path.Combine(AppContext.BaseDirectory, "Resources", "ArcRaidersRecycleValues.json");
 	private static string GetRecycleOutputsPath() => Path.Combine(AppContext.BaseDirectory, "Resources", "ArcRaidersRecycleOutputs.json");
 	private static string GetCraftingOverridesPath() => Path.Combine(AppContext.BaseDirectory, "Resources", "ArcRaidersCraftingKeep.json");
+	private static string GetCraftingUsagePath() => Path.Combine(AppContext.BaseDirectory, "Resources", "ArcRaidersCraftingUsage.json");
+	private static string GetCraftingWeightsPath() => Path.Combine(AppContext.BaseDirectory, "Resources", "ArcRaidersCraftingWeights.json");
 
 	private static bool HasValidOverrideFile(string path) {
 		try {
@@ -138,6 +150,32 @@ public static class ArcRaidersData {
 			foreach (var item in items) {
 				if (overrides.TryGetValue(item.Id, out var outputs) && outputs != null) {
 					item.RecycleOutputs = outputs;
+				}
+			}
+		} catch {
+			// Ignore override failures
+		}
+	}
+
+	private static void ApplyCraftingUsageOverrides(List<ArcItem> items) {
+		try {
+			string overridePath = GetCraftingUsagePath();
+			if (!File.Exists(overridePath)) return;
+
+			string json = File.ReadAllText(overridePath);
+			var overrides = JsonSerializer.Deserialize<Dictionary<string, int>>(json, new JsonSerializerOptions {
+				PropertyNameCaseInsensitive = true
+			});
+			if (overrides == null || overrides.Count == 0) return;
+
+			foreach (var item in items) {
+				if (overrides.TryGetValue(item.Id, out int usedInCount)) {
+					item.UsedInCount = Math.Max(item.UsedInCount, usedInCount);
+					item.HasCraftingUsageData = true;
+					if (usedInCount > 0) {
+						item.IsCraftingItem = true;
+						item.CraftingNote = $"Used in {usedInCount} recipes";
+					}
 				}
 			}
 		} catch {
@@ -260,7 +298,11 @@ public static class ArcRaidersData {
 					var items = Items.Value;
 					ApplyRecycleValueOverrides(items);
 					ApplyRecycleOutputOverrides(items);
+					ApplyCraftingUsageOverrides(items);
 					ApplyCraftingKeepOverrides(items);
+					if (fileName.Equals("ArcRaidersCraftingWeights.json", StringComparison.OrdinalIgnoreCase)) {
+						CraftingWeights = null;
+					}
 				}
 				AuxDataUpdated?.Invoke();
 			} catch {
@@ -272,7 +314,30 @@ public static class ArcRaidersData {
 	private static bool IsOverrideFile(string fileName) {
 		return fileName.Equals("ArcRaidersRecycleValues.json", StringComparison.OrdinalIgnoreCase)
 			|| fileName.Equals("ArcRaidersRecycleOutputs.json", StringComparison.OrdinalIgnoreCase)
-			|| fileName.Equals("ArcRaidersCraftingKeep.json", StringComparison.OrdinalIgnoreCase);
+			|| fileName.Equals("ArcRaidersCraftingKeep.json", StringComparison.OrdinalIgnoreCase)
+			|| fileName.Equals("ArcRaidersCraftingUsage.json", StringComparison.OrdinalIgnoreCase)
+			|| fileName.Equals("ArcRaidersCraftingWeights.json", StringComparison.OrdinalIgnoreCase);
+	}
+
+	public static CraftingWeightsConfig GetCraftingWeights() {
+		if (CraftingWeights != null) return CraftingWeights;
+		try {
+			string path = GetCraftingWeightsPath();
+			if (!File.Exists(path)) {
+				CraftingWeights = new CraftingWeightsConfig();
+				return CraftingWeights;
+			}
+
+			string json = File.ReadAllText(path);
+			var config = JsonSerializer.Deserialize<CraftingWeightsConfig>(json, new JsonSerializerOptions {
+				PropertyNameCaseInsensitive = true
+			});
+			CraftingWeights = config ?? new CraftingWeightsConfig();
+			return CraftingWeights;
+		} catch {
+			CraftingWeights = new CraftingWeightsConfig();
+			return CraftingWeights;
+		}
 	}
 
 	private static async Task<(int totalRecycleValue, int usedInCount, List<RecycleOutput> recycleOutputs)> TryFetchMetaforgeItemDetailsAsync(string itemId) {
@@ -470,6 +535,86 @@ public static class ArcRaidersData {
 				}
 			}
 		});
+	}
+
+	public static void EnsureCraftingUsageFor(string itemId) {
+		if (string.IsNullOrWhiteSpace(itemId)) return;
+		try {
+			var existingItem = Items.Value.FirstOrDefault(i => i.Id.Equals(itemId, StringComparison.OrdinalIgnoreCase));
+			if (existingItem != null && existingItem.HasCraftingUsageData) return;
+		} catch {
+			// Ignore lookup failures
+		}
+		string key = $"craft:{itemId}";
+		lock (RecycleFetchLock) {
+			if (PendingRecycleOutputFetches.Contains(key)) return;
+			PendingRecycleOutputFetches.Add(key);
+		}
+
+		Logger.LogDebug($"Crafting usage fetch queued for {itemId}");
+
+		_ = Task.Run(async () => {
+			try {
+				Logger.LogDebug($"Crafting usage fetch started for {itemId}");
+				var details = await TryFetchMetaforgeItemDetailsAsync(itemId).ConfigureAwait(false);
+				if (details.usedInCount <= 0) {
+					Logger.LogDebug($"Crafting usage fetch empty for {itemId}");
+					lock (RecycleFetchLock) {
+						var item = Items.Value.FirstOrDefault(i => i.Id.Equals(itemId, StringComparison.OrdinalIgnoreCase));
+						if (item != null) {
+							item.UsedInCount = Math.Max(item.UsedInCount, 0);
+							item.HasCraftingUsageData = true;
+						}
+					}
+					MergeCraftingUsage(itemId, 0);
+					AuxDataUpdated?.Invoke();
+					return;
+				}
+
+				lock (RecycleFetchLock) {
+					var item = Items.Value.FirstOrDefault(i => i.Id.Equals(itemId, StringComparison.OrdinalIgnoreCase));
+					if (item != null) {
+						item.UsedInCount = Math.Max(item.UsedInCount, details.usedInCount);
+						item.IsCraftingItem = true;
+						item.CraftingNote = $"Used in {item.UsedInCount} recipes";
+						item.HasCraftingUsageData = true;
+					}
+				}
+
+				MergeCraftingUsage(itemId, details.usedInCount);
+				Logger.LogDebug($"Crafting usage fetch success for {itemId}: {details.usedInCount}");
+				AuxDataUpdated?.Invoke();
+			} catch {
+				// Ignore fetch failures
+			} finally {
+				lock (RecycleFetchLock) {
+					PendingRecycleOutputFetches.Remove(key);
+				}
+			}
+		});
+	}
+
+	private static void MergeCraftingUsage(string itemId, int usedInCount) {
+		try {
+			string path = GetCraftingUsagePath();
+			var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+			if (File.Exists(path)) {
+				string json = File.ReadAllText(path);
+				var existing = JsonSerializer.Deserialize<Dictionary<string, int>>(json, new JsonSerializerOptions {
+					PropertyNameCaseInsensitive = true
+				});
+				if (existing != null) {
+					foreach (var kvp in existing) {
+						map[kvp.Key] = kvp.Value;
+					}
+				}
+			}
+
+			map[itemId] = usedInCount;
+			WriteOverrides(path, map);
+		} catch {
+			// Ignore merge failures
+		}
 	}
 
 	private static void MergeRecycleOutputs(string itemId, List<RecycleOutput> outputs) {

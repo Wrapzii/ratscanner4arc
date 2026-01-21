@@ -43,9 +43,17 @@ public static class ArcItemExtensions {
 			string note = string.IsNullOrWhiteSpace(item.CraftingNote) ? "Crafting material" : item.CraftingNote;
 			return (RecycleDecision.Keep, note);
 		}
+		var weights = ArcRaidersData.GetCraftingWeights();
+		double itemScore = GetItemUtilityScore(item, weights);
+		if (itemScore >= weights.KeepScoreThreshold) {
+			return (RecycleDecision.Keep, $"High craft utility (score {itemScore:0.##})");
+		}
+		if (!item.HasCraftingUsageData) {
+			ArcRaidersData.EnsureCraftingUsageFor(item.Id);
+		}
 
-		// Prefer recycling if it yields high-usage crafting materials
-		if (TryGetRecycleCraftingOutputs(item, out string recycleCraftingReason)) {
+		// Prefer recycling if it yields high-utility crafting materials
+		if (TryGetRecycleCraftingOutputs(item, weights, out string recycleCraftingReason)) {
 			return (RecycleDecision.Recycle, recycleCraftingReason);
 		}
 		
@@ -81,10 +89,10 @@ public static class ArcItemExtensions {
 		bool isRecyclable = item.IsRecyclable || item.Category.Equals("Recyclable", StringComparison.OrdinalIgnoreCase);
 		if (!isRecyclable) return reason;
 		if (item.RecycleOutputs != null && item.RecycleOutputs.Count > 0) return reason;
-		return $"{reason} (outputs loading...)";
+		return $"{reason} (outputs/loading...)";
 	}
 
-	private static bool TryGetRecycleCraftingOutputs(ArcRaidersData.ArcItem item, out string reason) {
+	private static bool TryGetRecycleCraftingOutputs(ArcRaidersData.ArcItem item, ArcRaidersData.CraftingWeightsConfig weights, out string reason) {
 		reason = string.Empty;
 		bool isRecyclable = item.IsRecyclable || item.Category.Equals("Recyclable", StringComparison.OrdinalIgnoreCase);
 		if (!isRecyclable) return false;
@@ -94,16 +102,19 @@ public static class ArcItemExtensions {
 		}
 
 		var matches = new List<(ArcRaidersData.RecycleOutput output, ArcRaidersData.ArcItem material)>();
+		double outputScore = 0;
 		foreach (var output in item.RecycleOutputs) {
 			if (string.IsNullOrWhiteSpace(output.Id)) continue;
 			var material = ArcRaidersData.GetItemById(output.Id);
 			if (material == null) continue;
-			if (material.IsCraftingItem || material.IsBaseItem) {
+			double materialScore = GetItemUtilityScore(material, weights);
+			outputScore += materialScore * Math.Max(1, output.Quantity);
+			if (material.IsCraftingItem || material.IsBaseItem || materialScore >= weights.KeepScoreThreshold) {
 				matches.Add((output, material));
 			}
 		}
 
-		if (matches.Count == 0) return false;
+		if (matches.Count == 0 || outputScore < weights.RecycleOutputScoreThreshold) return false;
 
 		string FormatOutput((ArcRaidersData.RecycleOutput output, ArcRaidersData.ArcItem material) entry) {
 			string name = string.IsNullOrWhiteSpace(entry.output.Name) ? entry.material.Name : entry.output.Name!;
@@ -117,7 +128,7 @@ public static class ArcItemExtensions {
 		const int maxOutputs = 5;
 		var preview = matches.Take(maxOutputs).Select(FormatOutput).ToArray();
 		int remaining = Math.Max(0, matches.Count - preview.Length);
-		var lines = new List<string> { "Recycle for crafting materials:" };
+		var lines = new List<string> { $"Recycle for high-utility outputs (score {outputScore:0.##}):" };
 		for (int i = 0; i < preview.Length; i++) {
 			bool isLast = i == preview.Length - 1 && remaining == 0;
 			string prefix = isLast ? "└─" : "├─";
@@ -133,6 +144,27 @@ public static class ArcItemExtensions {
 
 		reason = string.Join(Environment.NewLine, lines);
 		return true;
+	}
+
+	private static double GetItemUtilityScore(ArcRaidersData.ArcItem item, ArcRaidersData.CraftingWeightsConfig weights) {
+		double rarityMultiplier = GetRarityMultiplier(item.Rarity);
+		int usedInCount = item.UsedInCount > 0 ? item.UsedInCount : (item.IsCraftingItem ? 1 : 0);
+		int weightOverride = 0;
+		if (weights.ItemWeights.TryGetValue(item.Id, out int overrideWeight)) {
+			weightOverride = overrideWeight;
+		}
+		return (usedInCount * rarityMultiplier) + weightOverride;
+	}
+
+	private static double GetRarityMultiplier(string? rarity) {
+		if (string.IsNullOrWhiteSpace(rarity)) return 1.0;
+		switch (rarity.Trim().ToLowerInvariant()) {
+			case "uncommon": return 1.2;
+			case "rare": return 1.5;
+			case "epic": return 2.0;
+			case "legendary": return 2.5;
+			default: return 1.0;
+		}
 	}
 	
 	/// <summary>

@@ -3,6 +3,7 @@ param(
     [string]$OutputRecyclePath = (Join-Path $PSScriptRoot "..\Resources\ArcRaidersRecycleValues.json"),
     [string]$OutputRecycleOutputsPath = (Join-Path $PSScriptRoot "..\Resources\ArcRaidersRecycleOutputs.json"),
     [string]$OutputCraftingPath = (Join-Path $PSScriptRoot "..\Resources\ArcRaidersCraftingKeep.json"),
+    [string]$OutputCraftingUsagePath = (Join-Path $PSScriptRoot "..\Resources\ArcRaidersCraftingUsage.json"),
     [int]$DelayMs = 200
 )
 
@@ -34,6 +35,16 @@ if (Test-Path $OutputCraftingPath) {
     } catch { }
 }
 
+$existingCraftingUsage = @{}
+if (Test-Path $OutputCraftingUsagePath) {
+    try {
+        $existing = Get-Content -Path $OutputCraftingUsagePath -Raw | ConvertFrom-Json
+        foreach ($prop in $existing.PSObject.Properties) {
+            $existingCraftingUsage[$prop.Name] = [int]$prop.Value
+        }
+    } catch { }
+}
+
 $existingRecycleOutputs = @{}
 if (Test-Path $OutputRecycleOutputsPath) {
     try {
@@ -52,6 +63,9 @@ foreach ($key in $existingCrafting.Keys) { $craftingMap[$key] = $existingCraftin
 
 $recycleOutputsMap = @{}
 foreach ($key in $existingRecycleOutputs.Keys) { $recycleOutputsMap[$key] = $existingRecycleOutputs[$key] }
+
+$craftingUsageMap = @{}
+foreach ($key in $existingCraftingUsage.Keys) { $craftingUsageMap[$key] = $existingCraftingUsage[$key] }
 
 foreach ($item in $items) {
     $id = $item.Id
@@ -149,6 +163,7 @@ foreach ($item in $items) {
         }
         if ($usedInCount -gt 0) {
             $craftingMap[$id] = "Used in $usedInCount recipes"
+            $craftingUsageMap[$id] = $usedInCount
         }
 
         Start-Sleep -Milliseconds $DelayMs
@@ -165,6 +180,10 @@ $craftOut = [ordered]@{}
 foreach ($key in ($craftingMap.Keys | Sort-Object)) { $craftOut[$key] = $craftingMap[$key] }
 $craftOut | ConvertTo-Json -Depth 3 | Set-Content -Path $OutputCraftingPath -Encoding UTF8
 
+$craftUsageOut = [ordered]@{}
+foreach ($key in ($craftingUsageMap.Keys | Sort-Object)) { $craftUsageOut[$key] = $craftingUsageMap[$key] }
+$craftUsageOut | ConvertTo-Json -Depth 3 | Set-Content -Path $OutputCraftingUsagePath -Encoding UTF8
+
 $recycleOutputsOut = [ordered]@{}
 foreach ($key in ($recycleOutputsMap.Keys | Sort-Object)) { $recycleOutputsOut[$key] = $recycleOutputsMap[$key] }
 $recycleOutputsOut | ConvertTo-Json -Depth 4 | Set-Content -Path $OutputRecycleOutputsPath -Encoding UTF8
@@ -172,3 +191,4 @@ $recycleOutputsOut | ConvertTo-Json -Depth 4 | Set-Content -Path $OutputRecycleO
 Write-Host "Wrote recycle values to $OutputRecyclePath"
 Write-Host "Wrote recycle outputs to $OutputRecycleOutputsPath"
 Write-Host "Wrote crafting keep list to $OutputCraftingPath"
+Write-Host "Wrote crafting usage to $OutputCraftingUsagePath"
