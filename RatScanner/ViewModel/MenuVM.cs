@@ -68,7 +68,7 @@ internal class MenuVM : INotifyPropertyChanged {
 		try {
 			var dispatcher = Application.Current?.Dispatcher;
 			if (dispatcher != null && !dispatcher.CheckAccess()) {
-				dispatcher.Invoke(OnPropertyChanged);
+				dispatcher.Invoke(() => OnPropertyChanged());
 				return;
 			}
 		} catch {

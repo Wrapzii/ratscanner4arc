@@ -291,7 +291,7 @@ public static class ArcRaidersData {
 
 			int totalRecycleValue = 0;
 			if (root.TryGetValue("totalRecycleValue", out var totalRecycleObj)) {
-				totalRecycleValue = Convert.ToInt32(totalRecycleObj);
+				TryConvertToInt(totalRecycleObj, out totalRecycleValue);
 			}
 
 			var recycleOutputs = ExtractRecycleOutputs(root);
@@ -340,7 +340,9 @@ public static class ArcRaidersData {
 		int quantity = 1;
 
 		if (dict.TryGetValue("quantity", out var qtyObj) && qtyObj != null) {
-			quantity = Math.Max(1, Convert.ToInt32(qtyObj));
+			if (TryConvertToInt(qtyObj, out int parsedQuantity)) {
+				quantity = Math.Max(1, parsedQuantity);
+			}
 		}
 
 		if (dict.TryGetValue("item", out var itemObj) && itemObj is Dictionary<string, object?> itemDict) {
@@ -357,6 +359,37 @@ public static class ArcRaidersData {
 			Name = name,
 			Quantity = quantity
 		};
+	}
+
+	private static bool TryConvertToInt(object? value, out int result) {
+		result = 0;
+		if (value == null) return false;
+		switch (value) {
+			case int i:
+				result = i;
+				return true;
+			case long l:
+				result = l > int.MaxValue ? int.MaxValue : l < int.MinValue ? int.MinValue : (int)l;
+				return true;
+			case double d:
+				result = d > int.MaxValue ? int.MaxValue : d < int.MinValue ? int.MinValue : (int)Math.Round(d);
+				return true;
+			case float f:
+				result = f > int.MaxValue ? int.MaxValue : f < int.MinValue ? int.MinValue : (int)Math.Round(f);
+				return true;
+			case string s:
+				if (int.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out int parsedInt)) {
+					result = parsedInt;
+					return true;
+				}
+				if (double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double parsedDouble)) {
+					result = parsedDouble > int.MaxValue ? int.MaxValue : parsedDouble < int.MinValue ? int.MinValue : (int)Math.Round(parsedDouble);
+					return true;
+				}
+				return false;
+			default:
+				return false;
+		}
 	}
 
 	private static object? ResolveNode(JsonElement[] data, JsonElement element, Dictionary<int, object?> cache) {
