@@ -97,7 +97,8 @@ public class RatScannerMain : INotifyPropertyChanged {
 		new Thread(() => {
 			Thread.Sleep(1000);
 			Logger.LogInfo("Checking for updates...");
-			CheckForUpdates();
+			// Legacy update check disabled in favor of Velopack
+			// CheckForUpdates();
 
 			Logger.LogInfo("Setting up timer routines...");
 			_scanRefreshTimer = new Timer(RefreshOverlay, null, 1000, 500);

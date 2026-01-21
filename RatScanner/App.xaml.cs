@@ -167,7 +167,8 @@ public partial class App : Application, ISingleInstance {
 			await mgr.DownloadUpdatesAsync(newVersion);
 			mgr.ApplyUpdatesAndRestart(newVersion);
 		} catch (Exception ex) {
-			Logger.LogError("Update check failed", ex);
+			// Do not use Logger.LogError as it causes the application to exit
+			Logger.LogWarning("Update check failed: " + ex.Message, ex);
 		}
 	}
 }
