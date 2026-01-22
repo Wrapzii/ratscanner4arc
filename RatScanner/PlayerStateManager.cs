@@ -112,6 +112,19 @@ public static class PlayerStateManager {
 			SaveState();
 		}
 	}
+
+	public static void SetActiveQuests(IEnumerable<string> questIds, bool replace = true) {
+		var state = LoadState();
+		lock (StateLock) {
+			if (replace) {
+				state.ActiveQuests.Clear();
+			}
+			foreach (var questId in questIds) {
+				state.ActiveQuests.Add(questId);
+			}
+			SaveState();
+		}
+	}
 	
 	public static void RemoveActiveQuest(string questId) {
 		var state = LoadState();
@@ -169,6 +182,19 @@ public static class PlayerStateManager {
 		var state = LoadState();
 		lock (StateLock) {
 			state.WorkbenchLevels[workbenchId] = level;
+			SaveState();
+		}
+	}
+
+	public static void SetWorkbenchLevels(Dictionary<string, int> levels, bool replace = true) {
+		var state = LoadState();
+		lock (StateLock) {
+			if (replace) {
+				state.WorkbenchLevels.Clear();
+			}
+			foreach (var kvp in levels) {
+				state.WorkbenchLevels[kvp.Key] = kvp.Value;
+			}
 			SaveState();
 		}
 	}

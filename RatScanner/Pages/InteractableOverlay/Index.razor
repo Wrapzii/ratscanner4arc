@@ -11,19 +11,44 @@
 @inject RatScanner.VirtualScreenOffset VirtualScreenOffset
 @inject SettingsVM SettingsVM;
 @inject IJSRuntime JSRuntime;
+@inject RatScannerMain RatScanner
 @implements IDisposable
 
 <div id="click-away-background" style="position: absolute; width: 100%; height: 100%;"
      onmousedown="if (event.target == this) DotNet.invokeMethodAsync('RatScanner', 'JSHideOverlay')"></div>
 <div style="width: 100%; height: 100%;">
-    <div style="position: relative; top: 20%; pointer-events: none;">
-        <div class="d-flex align-content-center justify-center">
+    <div style="position: relative; top: 15%; pointer-events: none;">
+        <div class="d-flex flex-column align-center justify-center">
+            <!-- Search Bar -->
             <div style="width: 40vw; pointer-events: auto;">
-                <MudPaper>
+                <MudPaper Class="mb-4">
                     <MudTextField @ref="_searchTextField" T="string" Variant="Variant.Outlined"
                                   Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search"
-                                  DebounceInterval="20" OnDebounceIntervalElapsed="ExecuteSearch" @bind-Value="@_searchText">
+                                  DebounceInterval="20" OnDebounceIntervalElapsed="ExecuteSearch" @bind-Value="@_searchText"
+                                  Placeholder="Search RatScanner...">
                     </MudTextField>
+                </MudPaper>
+
+                <!-- Minimap Tools -->
+                <MudPaper Class="pa-4 mb-4" Style="background-color: rgba(30, 30, 40, 0.95);">
+                    <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-2">Minimap Tools</MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4">
+                        <MudText Typo="Typo.body2">
+                            Open your in-game map (M), ensuring it is fully visible, then click Calibrate.
+                        </MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Secondary" 
+                                   StartIcon="@Icons.Material.Filled.Map"
+                                   OnClick="CalibrateMap" 
+                                   Disabled="@_isCalibrating">
+                            @(_isCalibrating ? "Scanning..." : "Calibrate Position")
+                        </MudButton>
+                    </MudStack>
+                    @if (_calibrationResult != null)
+                    {
+                        <MudText Typo="Typo.caption" Color="@(_calibrationSuccess ? Color.Success : Color.Error)" Class="mt-1">
+                            @_calibrationResult
+                        </MudText>
+                    }
                 </MudPaper>
 
                 <MudStack Spacing="2" Class="py-2">
@@ -46,6 +71,29 @@
     private string _searchText { get; set; } = "";
     private IEnumerable<SearchResult> _searchResults { get; set; } = new List<SearchResult>();
     private readonly SearchService _searchService = new();
+
+    private bool _isCalibrating = false;
+    private string? _calibrationResult;
+    private bool _calibrationSuccess;
+
+    private async Task CalibrateMap()
+    {
+        _isCalibrating = true;
+        _calibrationResult = "Scanning screen (Overlay will hide momentarily)...";
+        StateHasChanged();
+        await Task.Delay(100);
+
+        // We invoke the manual calibration. 
+        // NOTE: If the overlay blocks the map, this may fail. 
+        // Ideally, the user should move this window or we make it transparent during scan.
+        // For now, let's assume the map is large enough or the overlay is not fully blocking critical OCR regions.
+        bool success = await RatScanner.StateDetectionManager.RunManualMapCalibration();
+        
+        _isCalibrating = false;
+        _calibrationSuccess = success;
+        _calibrationResult = success ? "Calibration Successful! Map detected." : "Calibration Failed. Ensure map is visible.";
+        StateHasChanged();
+    }
 
     private async void ExecuteSearch(string value) {
         var sanitizedValue = _searchService.SanitizeSearch(value);

@@ -1,5 +1,6 @@
 @using RatScanner
 @inject IJSRuntime JS
+@inject RatScannerMain RatScanner
 
 <div class="minimap-container @(IsVisible ? "visible" : "hidden")">
     @if (MinimapData != null)
@@ -7,7 +8,10 @@
         <div class="minimap">
             <div class="minimap-header">
                 <span class="map-name">@MinimapData.MapName</span>
-                <button @onclick="ToggleFullMap" class="btn-expand">🗺️</button>
+                <div>
+                     <button @onclick="StartCalibration" class="btn-expand mr-1" title="Calibrate Position">🎯</button>
+                     <button @onclick="ToggleFullMap" class="btn-expand">🗺️</button>
+                </div>
             </div>
             
             <div class="minimap-display" style="background-image: url('@MinimapData.MapImageUrl');">
@@ -44,10 +48,39 @@
     {
         <div class="minimap-disabled">
             <p>Position Unknown</p>
-            <small>Enter a raid to activate minimap</small>
+            <small>Enter a raid or </small>
+            <button @onclick="StartCalibration" class="btn-link">Calibrate Manually</button>
         </div>
     }
 </div>
+
+@if (ShowCalibrationDialog)
+{
+    <div class="fullmap-modal" @onclick="CancelCalibration">
+        <div class="fullmap-content" style="width: 400px; height: auto; text-align: center;" @onclick:stopPropagation="true">
+            <button @onclick="CancelCalibration" class="btn-close">×</button>
+            <h2 style="color: #4a9eff;">Calibrate Position</h2>
+            <div style="color: #ccc; margin: 20px 0;">
+                <p>1. Open your in-game map (M).</p>
+                <p>2. Ensure the map is fully visible.</p>
+                <p>3. Click "Scan" below.</p>
+            </div>
+            <div style="display: flex; justify-content: center; gap: 10px;">
+                <button @onclick="ConfirmCalibration" class="btn-zoom" style="padding: 10px 30px; font-size: 1.1em;">SCAN NOW</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (IsCalibrating)
+{
+    <div class="fullmap-modal">
+        <div style="background: rgba(20, 20, 30, 0.9); padding: 20px; border-radius: 8px; border: 2px solid #4a9eff; text-align: center;">
+            <h2 style="color: #4a9eff; margin: 0;">Scanning Screen...</h2>
+            <p style="color: #ccc;">Please wait</p>
+        </div>
+    </div>
+}
 
 @if (ShowFullMap)
 {
@@ -122,11 +155,13 @@
     private MapOverlayManager.MinimapData? MinimapData;
     private MapOverlayManager.InteractiveMapData? FullMapData;
     private bool ShowFullMap = false;
+    private bool ShowCalibrationDialog = false;
+    private bool IsCalibrating = false;
     private bool ShowLootSpawns = true;
     private bool ShowQuestMarkers = true;
     private double ZoomLevel = 1.0;
     
-    private readonly MapOverlayManager _mapManager = new();
+    private readonly MapOverlayManager _mapManager = MapOverlayManager.Instance;
     
     protected override void OnInitialized()
     {
@@ -138,6 +173,39 @@
                 StateHasChanged();
             });
         }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+    
+    private void StartCalibration()
+    {
+        ShowCalibrationDialog = true;
+    }
+
+    private void CancelCalibration()
+    {
+        ShowCalibrationDialog = false;
+    }
+
+    private async Task ConfirmCalibration()
+    {
+        ShowCalibrationDialog = false;
+        IsCalibrating = true;
+        StateHasChanged();
+        
+        // Wait a tiny bit for UI update
+        await Task.Delay(100);
+        
+        bool success = await RatScanner.StateDetectionManager.RunManualMapCalibration();
+        
+        IsCalibrating = false;
+        if (success)
+        {
+            RefreshMinimap();
+        }
+        else
+        {
+             // Could show error toast here
+        }
+        StateHasChanged();
     }
     
     private void RefreshMinimap()
@@ -337,6 +405,16 @@
         border-radius: 4px;
         cursor: pointer;
         font-weight: bold;
+    }
+
+    .btn-link {
+        background: none;
+        border: none;
+        color: #4a9eff;
+        text-decoration: underline;
+        cursor: pointer;
+        padding: 0;
+        margin-left: 5px;
     }
     
     .map-controls label {

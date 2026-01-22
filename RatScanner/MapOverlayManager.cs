@@ -12,6 +12,11 @@ namespace RatScanner;
 /// Map overlay system for displaying minimap and interactive map
 /// </summary>
 public class MapOverlayManager {
+	public static MapOverlayManager Instance { get; } = new();
+	
+	private MapOverlayManager() {
+	}
+	
 	public class MapPosition {
 		public double X { get; set; }
 		public double Y { get; set; }

@@ -1,7 +1,9 @@
 ﻿using RatScanner.View;
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using static RatScanner.RatConfig;
@@ -16,6 +18,9 @@ internal class HotkeyManager {
 	internal ActiveHotkey TooltipScanHotkey;
 	internal ActiveHotkey OpenInteractableOverlayHotkey;
 	internal ActiveHotkey CloseInteractableOverlayHotkey;
+	internal ActiveHotkey MapCalibrateHotkey;
+
+	private CancellationTokenSource? _calibrationHoldCts;
 
 	internal HotkeyManager() {
 		UserActivityHelper.Start(true, true);
@@ -37,7 +42,8 @@ internal class HotkeyManager {
 		nameof(NameScanHotkey),
 		nameof(TooltipScanHotkey),
 		nameof(OpenInteractableOverlayHotkey),
-		nameof(CloseInteractableOverlayHotkey))
+		nameof(CloseInteractableOverlayHotkey),
+		nameof(MapCalibrateHotkey))
 	]
 	internal void RegisterHotkeys() {
 		// Unregister hotkeys to prevent multiple listeners for the same hotkey
@@ -48,6 +54,11 @@ internal class HotkeyManager {
 		TooltipScanHotkey = new ActiveHotkey(TooltipScan.Hotkey, OnTooltipScanHotkey, ref TooltipScan.Enable);
 		OpenInteractableOverlayHotkey = new ActiveHotkey(OverlayC.Search.Hotkey, OnOpenInteractableOverlayHotkey, ref OverlayC.Search.Enable);
 		CloseInteractableOverlayHotkey = new ActiveHotkey(new Hotkey(new[] { Key.Escape }), OnCloseInteractableOverlayHotkey);
+		MapCalibrateHotkey = new ActiveHotkey(RatConfig.Map.CalibrateHotkey, OnMapCalibrateHotkey);
+
+		// Manual hooks for Hold-to-Calibrate logic
+		UserActivityHelper.OnKeyboardKeyDown += OnCalibrationInternalKeyDown;
+		UserActivityHelper.OnKeyboardKeyUp += OnCalibrationInternalKeyUp;
 	}
 
 	/// <summary>
@@ -57,6 +68,64 @@ internal class HotkeyManager {
 		NameScanHotkey?.Dispose();
 		TooltipScanHotkey?.Dispose();
 		OpenInteractableOverlayHotkey?.Dispose();
+		MapCalibrateHotkey?.Dispose();
+
+		UserActivityHelper.OnKeyboardKeyDown -= OnCalibrationInternalKeyDown;
+		UserActivityHelper.OnKeyboardKeyUp -= OnCalibrationInternalKeyUp;
+		CancelCalibrationHold();
+	}
+
+	private void CancelCalibrationHold() {
+		_calibrationHoldCts?.Cancel();
+		_calibrationHoldCts?.Dispose();
+		_calibrationHoldCts = null;
+	}
+
+	private void OnCalibrationInternalKeyDown(object? sender, KeyDownEventArgs e) {
+		// Only proceed if Hold is enabled and we aren't already holding
+		if (!RatConfig.Map.UseHoldToCalibrate || _calibrationHoldCts != null) return;
+		
+		// Check if the pressed key matches the configured hold key
+		// We only support single-key hold logic for stability
+		var holdKey = RatConfig.Map.CalibrateHoldHotkey.KeyboardKeys.FirstOrDefault();
+		if (holdKey == Key.None) return;
+
+		if (e.Key == holdKey) {
+			_calibrationHoldCts = new CancellationTokenSource();
+			var token = _calibrationHoldCts.Token;
+
+			Task.Run(async () => {
+				try {
+					int duration = RatConfig.Map.CalibrateHoldDurationMs;
+					Logger.LogDebug($"Hold {e.Key} for {duration}ms to calibrate...");
+					await Task.Delay(duration, token);
+					
+					if (!token.IsCancellationRequested) {
+						Logger.LogInfo("Calibration hold complete. Triggering...");
+						await RatScannerMain.Instance.StateDetectionManager.RunManualMapCalibration();
+					}
+				} catch (TaskCanceledException) {
+					// Expected when key is released early
+					Logger.LogDebug("Calibration hold cancelled.");
+				} finally {
+					// Reset CTS if we finished (successful or valid cancel) 
+					// But we need to be careful not to null out a NEW cts if this was a race, 
+					// though single threading of UI events usually prevents this.
+					if (_calibrationHoldCts?.Token == token) {
+						_calibrationHoldCts = null;
+					}
+				}
+			}, token);
+		}
+	}
+
+	private void OnCalibrationInternalKeyUp(object? sender, KeyUpEventArgs e) {
+		if (_calibrationHoldCts == null) return;
+		
+		var holdKey = RatConfig.Map.CalibrateHoldHotkey.KeyboardKeys.FirstOrDefault();
+		if (e.Key == holdKey) {
+			CancelCalibrationHold();
+		}
 	}
 
 	private static void Wrap<T>(Func<T> func) {
@@ -98,5 +167,13 @@ internal class HotkeyManager {
 
 	private void OnCloseInteractableOverlayHotkey(object? sender, KeyUpEventArgs e) {
 		Wrap(() => Application.Current.Dispatcher.Invoke(() => Wrap(() => BlazorUI.BlazorInteractableOverlay.HideOverlay())));
+	}
+
+	private void OnMapCalibrateHotkey(object? sender, KeyUpEventArgs e) {
+		Wrap(() => {
+			_ = Task.Run(async () => {
+				await RatScannerMain.Instance.StateDetectionManager.RunManualMapCalibration();
+			});
+		});
 	}
 }

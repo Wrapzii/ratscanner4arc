@@ -92,10 +92,18 @@ internal static class RatConfig {
 	// Overlay options
 	internal static class Overlay {
 		internal static class Search {
-			internal static bool Enable = true;
+			internal static bool Enable = false; // Disabled by default
 			internal static bool BlurBehind = true;
-			internal static Hotkey Hotkey = new(new[] { Key.N, Key.M }.ToList());
+			internal static Hotkey Hotkey = new(new[] { Key.LeftAlt }.ToList());
 		}
+	}
+
+	// Map options
+	internal static class Map {
+		internal static Hotkey CalibrateHotkey = new(new[] { Key.F12 }.ToList());
+		internal static Hotkey CalibrateHoldHotkey = new(new[] { Key.LeftAlt }.ToList());
+		internal static int CalibrateHoldDurationMs = 3000; // 3 seconds hold time
+		internal static bool UseHoldToCalibrate = true; 
 	}
 
 	// OAuth2 refresh tokens
@@ -108,7 +116,7 @@ internal static class RatConfig {
 	internal static bool LogDebug = false;
 	internal static bool MinimizeToTray = false;
 	internal static bool AlwaysOnTop = true;
-	private static int ConfigVersion => 2;
+	private static int ConfigVersion => 3;
 
 	internal static int ScreenWidth = 1920;
 	internal static int ScreenHeight = 1080;
@@ -186,6 +194,12 @@ internal static class RatConfig {
 		Overlay.Search.BlurBehind = config.ReadBool(nameof(Overlay.Search.BlurBehind), Overlay.Search.BlurBehind);
 		Overlay.Search.Hotkey = config.ReadHotkey(nameof(Overlay.Search.Hotkey), Overlay.Search.Hotkey);
 
+		config.Section = nameof(Map);
+		Map.CalibrateHotkey = config.ReadHotkey(nameof(Map.CalibrateHotkey), Map.CalibrateHotkey);
+		Map.CalibrateHoldHotkey = config.ReadHotkey(nameof(Map.CalibrateHoldHotkey), Map.CalibrateHoldHotkey);
+		Map.CalibrateHoldDurationMs = config.ReadInt(nameof(Map.CalibrateHoldDurationMs), Map.CalibrateHoldDurationMs);
+		Map.UseHoldToCalibrate = config.ReadBool(nameof(Map.UseHoldToCalibrate), Map.UseHoldToCalibrate);
+
 		config.Section = nameof(OAuthRefreshToken);
 		OAuthRefreshToken.Discord = config.ReadSecureString(nameof(OAuthRefreshToken.Discord), OAuthRefreshToken.Discord);
 		OAuthRefreshToken.Patreon = config.ReadSecureString(nameof(OAuthRefreshToken.Patreon), OAuthRefreshToken.Patreon);
@@ -243,6 +257,12 @@ internal static class RatConfig {
 		config.WriteBool(nameof(Overlay.Search.Enable), Overlay.Search.Enable);
 		config.WriteBool(nameof(Overlay.Search.BlurBehind), Overlay.Search.BlurBehind);
 		config.WriteHotkey(nameof(Overlay.Search.Hotkey), Overlay.Search.Hotkey);
+
+		config.Section = nameof(Map);
+		config.WriteHotkey(nameof(Map.CalibrateHotkey), Map.CalibrateHotkey);
+		config.WriteHotkey(nameof(Map.CalibrateHoldHotkey), Map.CalibrateHoldHotkey);
+		config.WriteInt(nameof(Map.CalibrateHoldDurationMs), Map.CalibrateHoldDurationMs);
+		config.WriteBool(nameof(Map.UseHoldToCalibrate), Map.UseHoldToCalibrate);
 
 		config.Section = nameof(OAuthRefreshToken);
 		config.WriteSecureString(nameof(OAuthRefreshToken.Discord), OAuthRefreshToken.Discord);

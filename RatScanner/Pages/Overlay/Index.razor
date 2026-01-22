@@ -7,6 +7,8 @@
 @inject IJSRuntime JSRuntime;
 @implements IDisposable
 
+<MinimapOverlay />
+
 <div style="transform-origin: top left; transform: scale(@((1f / SettingsVM.ScreenScale).ToString(CultureInfo.InvariantCulture)));">
     @foreach (var itemScan in MenuVM.ItemScans)
     {

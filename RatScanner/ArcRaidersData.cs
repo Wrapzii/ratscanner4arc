@@ -20,6 +20,9 @@ public static class ArcRaidersData {
 	private static readonly object RecycleFetchLock = new();
 	private static readonly HashSet<string> PendingRecycleOutputFetches = new(StringComparer.OrdinalIgnoreCase);
 	private static CraftingWeightsConfig? CraftingWeights;
+	private static readonly object RaidTheoryCacheLock = new();
+	private static List<RaidTheoryDataSource.RaidTheoryProject>? CachedProjects;
+	private static bool LoggedProjectsUnavailable;
 	
 	/// <summary>
 	/// Simplified item class for Arc Raiders with hardcoded values
@@ -834,15 +837,20 @@ public static class ArcRaidersData {
 		return GetHideoutModules().FirstOrDefault(h => h.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 	}
 	
+	private static List<RaidTheoryDataSource.RaidTheoryQuest>? _cachedQuests;
+
 	/// <summary>
 	/// Get all quests from RaidTheory data
 	/// </summary>
 	public static List<RaidTheoryDataSource.RaidTheoryQuest> GetQuests() {
+		if (_cachedQuests != null) return _cachedQuests;
+
 		if (!RaidTheoryDataSource.IsDataAvailable()) {
 			Logger.LogWarning("RaidTheory data not available for quests");
 			return new List<RaidTheoryDataSource.RaidTheoryQuest>();
 		}
-		return RaidTheoryDataSource.LoadQuests();
+		_cachedQuests = RaidTheoryDataSource.LoadQuests();
+		return _cachedQuests;
 	}
 	
 	/// <summary>
@@ -863,11 +871,23 @@ public static class ArcRaidersData {
 	/// Get all projects (blueprints) from RaidTheory data
 	/// </summary>
 	public static List<RaidTheoryDataSource.RaidTheoryProject> GetProjects() {
+		var cached = CachedProjects;
+		if (cached != null) return cached;
 		if (!RaidTheoryDataSource.IsDataAvailable()) {
-			Logger.LogWarning("RaidTheory data not available for projects");
+			if (!LoggedProjectsUnavailable) {
+				Logger.LogWarning("RaidTheory data not available for projects");
+				LoggedProjectsUnavailable = true;
+			}
 			return new List<RaidTheoryDataSource.RaidTheoryProject>();
 		}
-		return RaidTheoryDataSource.LoadProjects();
+
+		lock (RaidTheoryCacheLock) {
+			if (CachedProjects != null) return CachedProjects;
+			var projects = RaidTheoryDataSource.LoadProjects();
+			CachedProjects = projects;
+			LoggedProjectsUnavailable = false;
+			return projects;
+		}
 	}
 	
 	/// <summary>
@@ -877,15 +897,20 @@ public static class ArcRaidersData {
 		return GetProjects().FirstOrDefault(p => p.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 	}
 	
+	private static List<RaidTheoryDataSource.RaidTheoryMap>? _cachedMaps;
+
 	/// <summary>
 	/// Get all maps from RaidTheory data
 	/// </summary>
 	public static List<RaidTheoryDataSource.RaidTheoryMap> GetMaps() {
+		if (_cachedMaps != null) return _cachedMaps;
+
 		if (!RaidTheoryDataSource.IsDataAvailable()) {
 			Logger.LogWarning("RaidTheory data not available for maps");
 			return new List<RaidTheoryDataSource.RaidTheoryMap>();
 		}
-		return RaidTheoryDataSource.LoadMaps();
+		_cachedMaps = RaidTheoryDataSource.LoadMaps();
+		return _cachedMaps;
 	}
 	
 	/// <summary>
@@ -903,6 +928,9 @@ public static class ArcRaidersData {
 		if (success) {
 			// Trigger reload by clearing the lazy value
 			// Note: This requires restarting the application for full effect
+			lock (RaidTheoryCacheLock) {
+				CachedProjects = null;
+			}
 			Logger.LogInfo("RaidTheory data refreshed. Restart application to load new data.");
 			AuxDataUpdated?.Invoke();
 		}

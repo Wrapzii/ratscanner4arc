@@ -43,15 +43,21 @@ public partial class BlazorOverlay : Window {
 		}
 
 		nint handle = new WindowInteropHelper(this).Handle;
-		NativeMethods.SetWindowPos(handle, 0, left, top, right - left, bottom - top, 0);
+		const int HWND_TOPMOST = -1;
+		const uint SWP_NOACTIVATE = 0x0010;
+        const uint SWP_SHOWWINDOW = 0x0040;
+		NativeMethods.SetWindowPos(handle, HWND_TOPMOST, left, top, right - left, bottom - top, SWP_NOACTIVATE | SWP_SHOWWINDOW);
 	}
 
 	private void SetWindowStyle() {
 		const int gwlExStyle = -20; // GWL_EXSTYLE
 		const uint wsExToolWindow = 0x00000080; // WS_EX_TOOLWINDOW
+		const uint wsExTransparent = 0x00000020; // WS_EX_TRANSPARENT
+		const uint wsExNoActivate = 0x08000000; // WS_EX_NOACTIVATE
 
 		nint handle = new WindowInteropHelper(this).Handle;
-		NativeMethods.SetWindowLongPtr(handle, gwlExStyle, NativeMethods.GetWindowLongPtr(handle, gwlExStyle) | (nint)wsExToolWindow);
+		// Set WS_EX_TRANSPARENT to make the window click-through
+		NativeMethods.SetWindowLongPtr(handle, gwlExStyle, NativeMethods.GetWindowLongPtr(handle, gwlExStyle) | (nint)wsExToolWindow | (nint)wsExTransparent | (nint)wsExNoActivate);
 	}
 
 	private void WebView_Loaded(object? sender, CoreWebView2NavigationCompletedEventArgs e) {
