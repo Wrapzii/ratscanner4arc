@@ -284,4 +284,61 @@ public static class RaidTheoryDataSource {
 		/// </summary>
 		public string? GetDescription() => Description?.GetValueOrDefault("en");
 	}
+	
+	/// <summary>
+	/// RaidTheory hideout module data structure
+	/// </summary>
+	public class RaidTheoryHideoutModule {
+		public string Id { get; set; } = "";
+		public Dictionary<string, string>? Name { get; set; }
+		public int MaxLevel { get; set; } = 1;
+		public List<HideoutLevel>? Levels { get; set; }
+		
+		public class HideoutLevel {
+			public string? Description { get; set; }
+			public int Level { get; set; } = 1;
+			public List<string>? OtherRequirements { get; set; }
+			public List<string>? RequirementItemIds { get; set; }
+		}
+		
+		/// <summary>
+		/// Get name in English
+		/// </summary>
+		public string GetName() => Name?.GetValueOrDefault("en", Id) ?? Id;
+	}
+	
+	/// <summary>
+	/// Load all hideout modules from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryHideoutModule> LoadHideoutModules() {
+		var modules = new List<RaidTheoryHideoutModule>();
+		
+		try {
+			string hideoutDir = Path.Combine(DataPath, "hideout");
+			if (!Directory.Exists(hideoutDir)) {
+				Logger.LogWarning("RaidTheory hideout directory not found");
+				return modules;
+			}
+			
+			foreach (string file in Directory.GetFiles(hideoutDir, "*.json")) {
+				try {
+					string json = File.ReadAllText(file);
+					var module = JsonSerializer.Deserialize<RaidTheoryHideoutModule>(json, new JsonSerializerOptions {
+						PropertyNameCaseInsensitive = true
+					});
+					if (module != null) {
+						modules.Add(module);
+					}
+				} catch (Exception ex) {
+					Logger.LogWarning($"Failed to parse hideout module file {Path.GetFileName(file)}: {ex.Message}");
+				}
+			}
+			
+			Logger.LogInfo($"Loaded {modules.Count} hideout modules from RaidTheory data");
+		} catch (Exception ex) {
+			Logger.LogError($"Failed to load hideout modules from RaidTheory data: {ex.Message}");
+		}
+		
+		return modules;
+	}
 }

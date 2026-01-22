@@ -804,6 +804,24 @@ public static class ArcRaidersData {
 	}
 	
 	/// <summary>
+	/// Get all hideout modules from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheoryHideoutModule> GetHideoutModules() {
+		if (!RaidTheoryDataSource.IsDataAvailable()) {
+			Logger.LogWarning("RaidTheory data not available for hideout modules");
+			return new List<RaidTheoryDataSource.RaidTheoryHideoutModule>();
+		}
+		return RaidTheoryDataSource.LoadHideoutModules();
+	}
+	
+	/// <summary>
+	/// Get hideout module by ID
+	/// </summary>
+	public static RaidTheoryDataSource.RaidTheoryHideoutModule? GetHideoutModuleById(string id) {
+		return GetHideoutModules().FirstOrDefault(h => h.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+	}
+	
+	/// <summary>
 	/// Force refresh RaidTheory data from repository
 	/// </summary>
 	public static async Task<bool> RefreshRaidTheoryDataAsync() {
