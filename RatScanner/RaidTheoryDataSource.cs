@@ -38,7 +38,8 @@ public static class RaidTheoryDataSource {
 		try {
 			if (!File.Exists(LastUpdatePath)) return null;
 			string timestampStr = File.ReadAllText(LastUpdatePath).Trim();
-			if (DateTime.TryParse(timestampStr, out DateTime lastUpdate)) {
+			if (DateTime.TryParseExact(timestampStr, "O", System.Globalization.CultureInfo.InvariantCulture, 
+			                           System.Globalization.DateTimeStyles.RoundtripKind, out DateTime lastUpdate)) {
 				return DateTime.UtcNow - lastUpdate;
 			}
 		} catch (Exception ex) {
