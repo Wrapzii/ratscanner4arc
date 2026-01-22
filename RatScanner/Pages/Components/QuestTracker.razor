@@ -1,0 +1,404 @@
+@using RatScanner
+@inject IJSRuntime JS
+
+<div class="quest-tracker">
+    <div class="tracker-header">
+        <h3>Active Quests (@ActiveQuests.Count)</h3>
+        <button @onclick="RefreshQuests" class="btn-refresh">🔄</button>
+    </div>
+    
+    @if (ActiveQuests.Any())
+    {
+        <div class="quest-list">
+            @foreach (var quest in ActiveQuests)
+            {
+                <div class="quest-item" @onclick="() => SelectQuest(quest)">
+                    <div class="quest-name">@quest.GetName()</div>
+                    <div class="quest-trader">@quest.Trader</div>
+                    @if (quest.Objectives != null && quest.Objectives.Any())
+                    {
+                        <div class="quest-objectives">
+                            @foreach (var objective in quest.GetObjectives())
+                            {
+                                <div class="objective">• @objective</div>
+                            }
+                        </div>
+                    }
+                    @if (quest.RewardItemIds != null && quest.RewardItemIds.Any())
+                    {
+                        <div class="quest-rewards">
+                            <strong>Rewards:</strong>
+                            @foreach (var reward in quest.RewardItemIds)
+                            {
+                                <span class="reward-item">@reward.Quantity×@reward.ItemId</span>
+                            }
+                        </div>
+                    }
+                    <button @onclick="() => CompleteQuest(quest.Id)" @onclick:stopPropagation="true" 
+                            class="btn-complete">✓ Complete</button>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="no-quests">
+            <p>No active quests</p>
+            <button @onclick="ShowQuestBrowser" class="btn-browse">Browse Quests</button>
+        </div>
+    }
+    
+    @if (ShowBrowser)
+    {
+        <div class="quest-browser-modal">
+            <div class="modal-content">
+                <h3>All Quests</h3>
+                <button @onclick="() => ShowBrowser = false" class="btn-close">×</button>
+                
+                <div class="quest-filter">
+                    <select @onchange="FilterByTrader">
+                        <option value="">All Traders</option>
+                        <option value="Celeste">Celeste</option>
+                        <option value="Lance">Lance</option>
+                    </select>
+                </div>
+                
+                <div class="all-quests-list">
+                    @foreach (var quest in FilteredQuests)
+                    {
+                        bool isActive = PlayerStateManager.IsQuestActive(quest.Id);
+                        bool isCompleted = PlayerStateManager.IsQuestCompleted(quest.Id);
+                        
+                        <div class="quest-browser-item @(isActive ? "active" : "") @(isCompleted ? "completed" : "")">
+                            <div class="quest-info">
+                                <strong>@quest.GetName()</strong>
+                                <span class="trader-badge">@quest.Trader</span>
+                                @if (isCompleted)
+                                {
+                                    <span class="status-badge completed">✓ Completed</span>
+                                }
+                                else if (isActive)
+                                {
+                                    <span class="status-badge active">⚡ Active</span>
+                                }
+                            </div>
+                            @if (!isActive && !isCompleted)
+                            {
+                                <button @onclick="() => ActivateQuest(quest.Id)" class="btn-activate">
+                                    Activate
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<RaidTheoryDataSource.RaidTheoryQuest> ActiveQuests = new();
+    private List<RaidTheoryDataSource.RaidTheoryQuest> AllQuests = new();
+    private List<RaidTheoryDataSource.RaidTheoryQuest> FilteredQuests = new();
+    private bool ShowBrowser = false;
+    private string? SelectedTrader = null;
+
+    protected override void OnInitialized()
+    {
+        RefreshQuests();
+        LoadAllQuests();
+    }
+
+    private void RefreshQuests()
+    {
+        var state = PlayerStateManager.GetState();
+        var allQuests = ArcRaidersData.GetQuests();
+        
+        ActiveQuests = allQuests
+            .Where(q => state.ActiveQuests.Contains(q.Id))
+            .ToList();
+        
+        StateHasChanged();
+    }
+
+    private void LoadAllQuests()
+    {
+        AllQuests = ArcRaidersData.GetQuests();
+        FilteredQuests = AllQuests;
+    }
+
+    private void SelectQuest(RaidTheoryDataSource.RaidTheoryQuest quest)
+    {
+        Logger.LogInfo($"Selected quest: {quest.GetName()}");
+    }
+
+    private void CompleteQuest(string questId)
+    {
+        PlayerStateManager.CompleteQuest(questId);
+        RefreshQuests();
+        Logger.LogInfo($"Quest completed: {questId}");
+    }
+
+    private void ActivateQuest(string questId)
+    {
+        PlayerStateManager.AddActiveQuest(questId);
+        RefreshQuests();
+        ShowBrowser = false;
+        Logger.LogInfo($"Quest activated: {questId}");
+    }
+
+    private void ShowQuestBrowser()
+    {
+        ShowBrowser = true;
+    }
+
+    private void FilterByTrader(ChangeEventArgs e)
+    {
+        SelectedTrader = e.Value?.ToString();
+        
+        if (string.IsNullOrEmpty(SelectedTrader))
+        {
+            FilteredQuests = AllQuests;
+        }
+        else
+        {
+            FilteredQuests = AllQuests
+                .Where(q => q.Trader.Equals(SelectedTrader, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+        
+        StateHasChanged();
+    }
+}
+
+<style>
+    .quest-tracker {
+        background: rgba(20, 20, 30, 0.95);
+        border: 2px solid #4a9eff;
+        border-radius: 8px;
+        padding: 15px;
+        max-width: 400px;
+        color: #fff;
+    }
+    
+    .tracker-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #4a9eff;
+        padding-bottom: 10px;
+    }
+    
+    .tracker-header h3 {
+        margin: 0;
+        color: #4a9eff;
+    }
+    
+    .btn-refresh {
+        background: none;
+        border: 1px solid #4a9eff;
+        color: #4a9eff;
+        padding: 5px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .quest-list {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    
+    .quest-item {
+        background: rgba(40, 40, 50, 0.8);
+        border: 1px solid #555;
+        border-radius: 6px;
+        padding: 10px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .quest-item:hover {
+        border-color: #4a9eff;
+        transform: translateX(5px);
+    }
+    
+    .quest-name {
+        font-weight: bold;
+        font-size: 1.1em;
+        color: #ffd700;
+        margin-bottom: 5px;
+    }
+    
+    .quest-trader {
+        color: #4a9eff;
+        font-size: 0.9em;
+        margin-bottom: 8px;
+    }
+    
+    .quest-objectives {
+        margin: 8px 0;
+        padding-left: 10px;
+    }
+    
+    .objective {
+        color: #ccc;
+        font-size: 0.9em;
+        margin: 3px 0;
+    }
+    
+    .quest-rewards {
+        margin-top: 8px;
+        font-size: 0.85em;
+        color: #9f9;
+    }
+    
+    .reward-item {
+        display: inline-block;
+        margin-right: 10px;
+        background: rgba(50, 150, 50, 0.3);
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+    
+    .btn-complete {
+        margin-top: 8px;
+        background: #4a9eff;
+        border: none;
+        color: #fff;
+        padding: 5px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    
+    .no-quests {
+        text-align: center;
+        padding: 30px;
+        color: #999;
+    }
+    
+    .btn-browse {
+        background: #4a9eff;
+        border: none;
+        color: #fff;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 15px;
+    }
+    
+    .quest-browser-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    
+    .modal-content {
+        background: rgba(20, 20, 30, 0.98);
+        border: 2px solid #4a9eff;
+        border-radius: 8px;
+        padding: 20px;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+        position: relative;
+    }
+    
+    .btn-close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: #f44;
+        border: none;
+        color: #fff;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 20px;
+    }
+    
+    .quest-filter {
+        margin: 15px 0;
+    }
+    
+    .quest-filter select {
+        width: 100%;
+        padding: 8px;
+        background: rgba(40, 40, 50, 0.8);
+        border: 1px solid #4a9eff;
+        color: #fff;
+        border-radius: 4px;
+    }
+    
+    .all-quests-list {
+        margin-top: 15px;
+    }
+    
+    .quest-browser-item {
+        background: rgba(40, 40, 50, 0.6);
+        border: 1px solid #555;
+        border-radius: 4px;
+        padding: 12px;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .quest-browser-item.active {
+        border-color: #ffa500;
+        background: rgba(255, 165, 0, 0.1);
+    }
+    
+    .quest-browser-item.completed {
+        border-color: #4f4;
+        background: rgba(50, 255, 50, 0.1);
+        opacity: 0.7;
+    }
+    
+    .trader-badge {
+        display: inline-block;
+        background: rgba(74, 158, 255, 0.3);
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.8em;
+        margin-left: 10px;
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.8em;
+        margin-left: 10px;
+    }
+    
+    .status-badge.active {
+        background: rgba(255, 165, 0, 0.3);
+        color: #ffa500;
+    }
+    
+    .status-badge.completed {
+        background: rgba(50, 255, 50, 0.3);
+        color: #4f4;
+    }
+    
+    .btn-activate {
+        background: #4a9eff;
+        border: none;
+        color: #fff;
+        padding: 6px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+</style>

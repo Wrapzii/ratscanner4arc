@@ -1,0 +1,403 @@
+@using RatScanner
+@inject IJSRuntime JS
+
+<div class="minimap-container @(IsVisible ? "visible" : "hidden")">
+    @if (MinimapData != null)
+    {
+        <div class="minimap">
+            <div class="minimap-header">
+                <span class="map-name">@MinimapData.MapName</span>
+                <button @onclick="ToggleFullMap" class="btn-expand">🗺️</button>
+            </div>
+            
+            <div class="minimap-display" style="background-image: url('@MinimapData.MapImageUrl');">
+                <div class="player-marker" 
+                     style="left: @(MinimapData.PlayerX)%; top: @(MinimapData.PlayerY)%;">
+                    📍
+                </div>
+                
+                @foreach (var loot in MinimapData.NearbyLoot)
+                {
+                    <div class="loot-marker @GetRarityClass(loot.Rarity)"
+                         style="left: @(loot.X)%; top: @(loot.Y)%;"
+                         title="@loot.ItemType">
+                        ⭐
+                    </div>
+                }
+            </div>
+            
+            @if (MinimapData.NearbyLoot.Any())
+            {
+                <div class="nearby-loot-list">
+                    <div class="list-header">Nearby Loot:</div>
+                    @foreach (var loot in MinimapData.NearbyLoot.Take(5))
+                    {
+                        <div class="loot-item @GetRarityClass(loot.Rarity)">
+                            • @loot.ItemType
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="minimap-disabled">
+            <p>Position Unknown</p>
+            <small>Enter a raid to activate minimap</small>
+        </div>
+    }
+</div>
+
+@if (ShowFullMap)
+{
+    <div class="fullmap-modal" @onclick="() => ShowFullMap = false">
+        <div class="fullmap-content" @onclick:stopPropagation="true">
+            <button @onclick="() => ShowFullMap = false" class="btn-close">×</button>
+            <h2>@(FullMapData?.MapName ?? "Map")</h2>
+            
+            @if (FullMapData != null)
+            {
+                <div class="map-controls">
+                    <button @onclick="ZoomIn" class="btn-zoom">+</button>
+                    <button @onclick="ZoomOut" class="btn-zoom">-</button>
+                    <button @onclick="ResetZoom" class="btn-zoom">Reset</button>
+                    
+                    <label>
+                        <input type="checkbox" @bind="ShowLootSpawns" /> Show Loot Spawns
+                    </label>
+                    <label>
+                        <input type="checkbox" @bind="ShowQuestMarkers" /> Show Quest Markers
+                    </label>
+                </div>
+                
+                <div class="fullmap-display" style="background-image: url('@FullMapData.MapImageUrl'); transform: scale(@ZoomLevel);">
+                    @if (FullMapData.PlayerPosition != null)
+                    {
+                        <div class="player-marker-large" 
+                             style="left: @(FullMapData.PlayerPosition.X)%; top: @(FullMapData.PlayerPosition.Y)%;">
+                            📍 YOU
+                        </div>
+                    }
+                    
+                    @if (ShowLootSpawns)
+                    {
+                        @foreach (var loot in FullMapData.LootSpawns)
+                        {
+                            <div class="loot-spawn @GetRarityClass(loot.Rarity)"
+                                 style="left: @(loot.X)%; top: @(loot.Y)%;"
+                                 title="@loot.ItemType">
+                                💎
+                            </div>
+                        }
+                    }
+                    
+                    @if (ShowQuestMarkers)
+                    {
+                        @foreach (var quest in FullMapData.QuestLocations)
+                        {
+                            <div class="quest-marker"
+                                 style="left: @(quest.X)%; top: @(quest.Y)%;"
+                                 title="@quest.QuestName - @quest.Objective">
+                                ❗
+                            </div>
+                        }
+                    }
+                </div>
+                
+                <div class="map-legend">
+                    <div class="legend-item"><span class="marker player">📍</span> Your Position</div>
+                    <div class="legend-item"><span class="marker quest">❗</span> Quest Objective</div>
+                    <div class="legend-item"><span class="marker loot">💎</span> Loot Spawn</div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; } = true;
+    
+    private MapOverlayManager.MinimapData? MinimapData;
+    private MapOverlayManager.InteractiveMapData? FullMapData;
+    private bool ShowFullMap = false;
+    private bool ShowLootSpawns = true;
+    private bool ShowQuestMarkers = true;
+    private double ZoomLevel = 1.0;
+    
+    private readonly MapOverlayManager _mapManager = new();
+    
+    protected override void OnInitialized()
+    {
+        RefreshMinimap();
+        
+        var timer = new System.Threading.Timer(_ => {
+            InvokeAsync(() => {
+                RefreshMinimap();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+    
+    private void RefreshMinimap()
+    {
+        MinimapData = _mapManager.GenerateMinimapData();
+    }
+    
+    private void ToggleFullMap()
+    {
+        if (MinimapData == null) return;
+        
+        FullMapData = _mapManager.GenerateInteractiveMapData(MinimapData.MapId);
+        ShowFullMap = true;
+    }
+    
+    private void ZoomIn() => ZoomLevel = Math.Min(3.0, ZoomLevel + 0.25);
+    private void ZoomOut() => ZoomLevel = Math.Max(0.5, ZoomLevel - 0.25);
+    private void ResetZoom() => ZoomLevel = 1.0;
+    
+    private string GetRarityClass(string rarity)
+    {
+        return rarity.ToLower() switch
+        {
+            "legendary" => "rarity-legendary",
+            "epic" => "rarity-epic",
+            "rare" => "rarity-rare",
+            "uncommon" => "rarity-uncommon",
+            _ => "rarity-common"
+        };
+    }
+}
+
+<style>
+    .minimap-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 900;
+        transition: opacity 0.3s;
+    }
+    
+    .minimap-container.hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+    
+    .minimap {
+        background: rgba(20, 20, 30, 0.95);
+        border: 2px solid #4a9eff;
+        border-radius: 8px;
+        padding: 10px;
+        width: 250px;
+    }
+    
+    .minimap-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        color: #4a9eff;
+        font-weight: bold;
+    }
+    
+    .btn-expand {
+        background: none;
+        border: 1px solid #4a9eff;
+        color: #4a9eff;
+        padding: 3px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .minimap-display {
+        width: 100%;
+        height: 230px;
+        background-size: cover;
+        background-position: center;
+        border-radius: 6px;
+        position: relative;
+        border: 1px solid #555;
+    }
+    
+    .player-marker {
+        position: absolute;
+        font-size: 20px;
+        transform: translate(-50%, -50%);
+        filter: drop-shadow(0 0 3px #fff);
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    @@keyframes pulse {
+        0%, 100% { transform: translate(-50%, -50%) scale(1); }
+        50% { transform: translate(-50%, -50%) scale(1.2); }
+    }
+    
+    .loot-marker {
+        position: absolute;
+        font-size: 12px;
+        transform: translate(-50%, -50%);
+        cursor: pointer;
+    }
+    
+    .loot-marker.rarity-legendary { color: #ff8c00; filter: drop-shadow(0 0 2px #ff8c00); }
+    .loot-marker.rarity-epic { color: #a335ee; filter: drop-shadow(0 0 2px #a335ee); }
+    .loot-marker.rarity-rare { color: #0070dd; filter: drop-shadow(0 0 2px #0070dd); }
+    .loot-marker.rarity-uncommon { color: #1eff00; filter: drop-shadow(0 0 2px #1eff00); }
+    .loot-marker.rarity-common { color: #fff; }
+    
+    .nearby-loot-list {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #555;
+        font-size: 0.85em;
+        color: #ccc;
+    }
+    
+    .list-header {
+        color: #4a9eff;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .loot-item {
+        margin: 2px 0;
+        padding: 2px;
+    }
+    
+    .minimap-disabled {
+        background: rgba(20, 20, 30, 0.95);
+        border: 2px solid #666;
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        color: #999;
+    }
+    
+    .fullmap-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    
+    .fullmap-content {
+        background: rgba(20, 20, 30, 0.98);
+        border: 3px solid #4a9eff;
+        border-radius: 12px;
+        padding: 20px;
+        width: 90vw;
+        height: 90vh;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .fullmap-content h2 {
+        color: #4a9eff;
+        margin: 0 0 15px 0;
+    }
+    
+    .btn-close {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: #f44;
+        border: none;
+        color: #fff;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 24px;
+        z-index: 10;
+    }
+    
+    .map-controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 15px;
+        padding: 10px;
+        background: rgba(40, 40, 50, 0.8);
+        border-radius: 6px;
+    }
+    
+    .btn-zoom {
+        background: #4a9eff;
+        border: none;
+        color: #fff;
+        padding: 8px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    
+    .map-controls label {
+        color: #fff;
+        margin-left: 15px;
+    }
+    
+    .fullmap-display {
+        flex: 1;
+        background-size: contain;
+        background-position: center;
+        background-repeat: no-repeat;
+        border-radius: 8px;
+        position: relative;
+        overflow: auto;
+        border: 2px solid #555;
+    }
+    
+    .player-marker-large {
+        position: absolute;
+        font-size: 24px;
+        color: #0f0;
+        font-weight: bold;
+        transform: translate(-50%, -50%);
+        filter: drop-shadow(0 0 5px #0f0);
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    .loot-spawn {
+        position: absolute;
+        font-size: 16px;
+        transform: translate(-50%, -50%);
+        cursor: help;
+    }
+    
+    .quest-marker {
+        position: absolute;
+        font-size: 20px;
+        color: #ffd700;
+        transform: translate(-50%, -50%);
+        filter: drop-shadow(0 0 3px #ffd700);
+        cursor: help;
+    }
+    
+    .map-legend {
+        display: flex;
+        gap: 20px;
+        padding: 10px;
+        background: rgba(40, 40, 50, 0.9);
+        border-radius: 6px;
+        margin-top: 10px;
+        color: #fff;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .marker {
+        font-size: 18px;
+    }
+</style>
