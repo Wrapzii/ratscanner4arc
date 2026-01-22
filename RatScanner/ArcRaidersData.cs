@@ -835,6 +835,67 @@ public static class ArcRaidersData {
 	}
 	
 	/// <summary>
+	/// Get all quests from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheoryQuest> GetQuests() {
+		if (!RaidTheoryDataSource.IsDataAvailable()) {
+			Logger.LogWarning("RaidTheory data not available for quests");
+			return new List<RaidTheoryDataSource.RaidTheoryQuest>();
+		}
+		return RaidTheoryDataSource.LoadQuests();
+	}
+	
+	/// <summary>
+	/// Get quest by ID
+	/// </summary>
+	public static RaidTheoryDataSource.RaidTheoryQuest? GetQuestById(string id) {
+		return GetQuests().FirstOrDefault(q => q.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+	}
+	
+	/// <summary>
+	/// Get quests by trader
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheoryQuest> GetQuestsByTrader(string traderName) {
+		return GetQuests().Where(q => q.Trader.Equals(traderName, StringComparison.OrdinalIgnoreCase)).ToList();
+	}
+	
+	/// <summary>
+	/// Get all projects (blueprints) from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheoryProject> GetProjects() {
+		if (!RaidTheoryDataSource.IsDataAvailable()) {
+			Logger.LogWarning("RaidTheory data not available for projects");
+			return new List<RaidTheoryDataSource.RaidTheoryProject>();
+		}
+		return RaidTheoryDataSource.LoadProjects();
+	}
+	
+	/// <summary>
+	/// Get project by ID
+	/// </summary>
+	public static RaidTheoryDataSource.RaidTheoryProject? GetProjectById(string id) {
+		return GetProjects().FirstOrDefault(p => p.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+	}
+	
+	/// <summary>
+	/// Get all maps from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheoryMap> GetMaps() {
+		if (!RaidTheoryDataSource.IsDataAvailable()) {
+			Logger.LogWarning("RaidTheory data not available for maps");
+			return new List<RaidTheoryDataSource.RaidTheoryMap>();
+		}
+		return RaidTheoryDataSource.LoadMaps();
+	}
+	
+	/// <summary>
+	/// Get map by ID
+	/// </summary>
+	public static RaidTheoryDataSource.RaidTheoryMap? GetMapById(string id) {
+		return GetMaps().FirstOrDefault(m => m.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+	}
+	
+	/// <summary>
 	/// Force refresh RaidTheory data from repository
 	/// </summary>
 	public static async Task<bool> RefreshRaidTheoryDataAsync() {

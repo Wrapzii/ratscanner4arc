@@ -342,4 +342,176 @@ public static class RaidTheoryDataSource {
 		
 		return modules;
 	}
+	
+	/// <summary>
+	/// RaidTheory quest data structure
+	/// </summary>
+	public class RaidTheoryQuest {
+		public string Id { get; set; } = "";
+		public Dictionary<string, string>? Name { get; set; }
+		public string Trader { get; set; } = "";
+		public Dictionary<string, string>? Description { get; set; }
+		public List<Dictionary<string, string>>? Objectives { get; set; }
+		public List<RewardItem>? RewardItemIds { get; set; }
+		public int Xp { get; set; } = 0;
+		public List<string>? PreviousQuestIds { get; set; }
+		public List<string>? NextQuestIds { get; set; }
+		public string? UpdatedAt { get; set; }
+		
+		public class RewardItem {
+			public string ItemId { get; set; } = "";
+			public int Quantity { get; set; } = 1;
+		}
+		
+		/// <summary>
+		/// Get name in English
+		/// </summary>
+		public string GetName() => Name?.GetValueOrDefault("en", Id) ?? Id;
+		
+		/// <summary>
+		/// Get description in English
+		/// </summary>
+		public string? GetDescription() => Description?.GetValueOrDefault("en");
+		
+		/// <summary>
+		/// Get objectives in English
+		/// </summary>
+		public List<string> GetObjectives() {
+			if (Objectives == null) return new List<string>();
+			return Objectives.Select(obj => obj.GetValueOrDefault("en", "")).Where(s => !string.IsNullOrEmpty(s)).ToList();
+		}
+	}
+	
+	/// <summary>
+	/// Load all quests from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryQuest> LoadQuests() {
+		var quests = new List<RaidTheoryQuest>();
+		
+		try {
+			string questsDir = Path.Combine(DataPath, "quests");
+			if (!Directory.Exists(questsDir)) {
+				Logger.LogWarning("RaidTheory quests directory not found");
+				return quests;
+			}
+			
+			foreach (string file in Directory.GetFiles(questsDir, "*.json")) {
+				try {
+					string json = File.ReadAllText(file);
+					var quest = JsonSerializer.Deserialize<RaidTheoryQuest>(json, new JsonSerializerOptions {
+						PropertyNameCaseInsensitive = true
+					});
+					if (quest != null) {
+						quests.Add(quest);
+					}
+				} catch (Exception ex) {
+					Logger.LogWarning($"Failed to parse quest file {Path.GetFileName(file)}: {ex.Message}");
+				}
+			}
+			
+			Logger.LogInfo($"Loaded {quests.Count} quests from RaidTheory data");
+		} catch (Exception ex) {
+			Logger.LogError($"Failed to load quests from RaidTheory data: {ex.Message}");
+		}
+		
+		return quests;
+	}
+	
+	/// <summary>
+	/// RaidTheory project (blueprint/crafting) data structure
+	/// </summary>
+	public class RaidTheoryProject {
+		public string Id { get; set; } = "";
+		public bool Disabled { get; set; } = false;
+		public Dictionary<string, string>? Name { get; set; }
+		public Dictionary<string, string>? Description { get; set; }
+		public List<ProjectPhase>? Phases { get; set; }
+		
+		public class ProjectPhase {
+			public Dictionary<string, string>? Name { get; set; }
+			public int Phase { get; set; } = 1;
+			public List<RequirementItem>? RequirementItemIds { get; set; }
+		}
+		
+		public class RequirementItem {
+			public string ItemId { get; set; } = "";
+			public int Quantity { get; set; } = 1;
+		}
+		
+		/// <summary>
+		/// Get name in English
+		/// </summary>
+		public string GetName() => Name?.GetValueOrDefault("en", Id) ?? Id;
+		
+		/// <summary>
+		/// Get description in English
+		/// </summary>
+		public string? GetDescription() => Description?.GetValueOrDefault("en");
+	}
+	
+	/// <summary>
+	/// Load all projects (blueprints) from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryProject> LoadProjects() {
+		var projects = new List<RaidTheoryProject>();
+		
+		try {
+			string projectsFile = Path.Combine(DataPath, "projects.json");
+			if (!File.Exists(projectsFile)) {
+				Logger.LogWarning("RaidTheory projects.json not found");
+				return projects;
+			}
+			
+			string json = File.ReadAllText(projectsFile);
+			projects = JsonSerializer.Deserialize<List<RaidTheoryProject>>(json, new JsonSerializerOptions {
+				PropertyNameCaseInsensitive = true
+			}) ?? new List<RaidTheoryProject>();
+			
+			Logger.LogInfo($"Loaded {projects.Count} projects from RaidTheory data");
+		} catch (Exception ex) {
+			Logger.LogError($"Failed to load projects from RaidTheory data: {ex.Message}");
+		}
+		
+		return projects;
+	}
+	
+	/// <summary>
+	/// RaidTheory map data structure
+	/// </summary>
+	public class RaidTheoryMap {
+		public string Id { get; set; } = "";
+		public Dictionary<string, string>? Name { get; set; }
+		public string? Image { get; set; }
+		
+		/// <summary>
+		/// Get name in English
+		/// </summary>
+		public string GetName() => Name?.GetValueOrDefault("en", Id) ?? Id;
+	}
+	
+	/// <summary>
+	/// Load all maps from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryMap> LoadMaps() {
+		var maps = new List<RaidTheoryMap>();
+		
+		try {
+			string mapsFile = Path.Combine(DataPath, "maps.json");
+			if (!File.Exists(mapsFile)) {
+				Logger.LogWarning("RaidTheory maps.json not found");
+				return maps;
+			}
+			
+			string json = File.ReadAllText(mapsFile);
+			maps = JsonSerializer.Deserialize<List<RaidTheoryMap>>(json, new JsonSerializerOptions {
+				PropertyNameCaseInsensitive = true
+			}) ?? new List<RaidTheoryMap>();
+			
+			Logger.LogInfo($"Loaded {maps.Count} maps from RaidTheory data");
+		} catch (Exception ex) {
+			Logger.LogError($"Failed to load maps from RaidTheory data: {ex.Message}");
+		}
+		
+		return maps;
+	}
 }

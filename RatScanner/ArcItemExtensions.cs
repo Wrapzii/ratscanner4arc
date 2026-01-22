@@ -28,6 +28,15 @@ public static class ArcItemExtensions {
 	/// <param name="item">The item to evaluate</param>
 	/// <returns>Tuple indicating if item should be recycled and the reason</returns>
 	public static (RecycleDecision decision, string reason) GetRecycleRecommendation(this ArcRaidersData.ArcItem item) {
+		// Check player state first - highest priority
+		if (PlayerStateManager.IsResourceTracked(item.Id)) {
+			return (RecycleDecision.Keep, "★ Manually tracked");
+		}
+		
+		if (PlayerStateManager.IsItemNeeded(item.Id)) {
+			return (RecycleDecision.Keep, "★ Needed for quest/project");
+		}
+		
 		// Check if item is needed for quests
 		if (item.IsQuestItem) {
 			return (RecycleDecision.Keep, "Needed for quest");
