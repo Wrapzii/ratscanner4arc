@@ -87,7 +87,11 @@ public static class ArcRaidersData {
 					
 					// Start async data download in background if needed
 					_ = Task.Run(async () => {
-						await RaidTheoryDataSource.EnsureDataAsync().ConfigureAwait(false);
+						try {
+							await RaidTheoryDataSource.EnsureDataAsync().ConfigureAwait(false);
+						} catch (Exception ex) {
+							Logger.LogDebug($"Background data refresh failed: {ex.Message}");
+						}
 					});
 					
 					return items;
@@ -100,18 +104,23 @@ public static class ArcRaidersData {
 			if (!File.Exists(dataPath)) {
 				Logger.LogWarning("No data source available, attempting to download RaidTheory data...");
 				// Try to download data synchronously as last resort
-				var downloadTask = RaidTheoryDataSource.DownloadDataAsync();
-				downloadTask.Wait(TimeSpan.FromSeconds(30));
-				if (downloadTask.Result && RaidTheoryDataSource.IsDataAvailable()) {
-					var items = LoadItemsFromRaidTheory();
-					if (items.Count > 0) {
-						ApplyRecycleValueOverrides(items);
-						ApplyRecycleOutputOverrides(items);
-						ApplyCraftingUsageOverrides(items);
-						ApplyCraftingKeepOverrides(items);
-						EnsureOverrideWatchers();
-						return items;
+				try {
+					var downloadTask = RaidTheoryDataSource.DownloadDataAsync();
+					// Use GetAwaiter().GetResult() to avoid potential deadlock
+					bool success = downloadTask.GetAwaiter().GetResult();
+					if (success && RaidTheoryDataSource.IsDataAvailable()) {
+						var items = LoadItemsFromRaidTheory();
+						if (items.Count > 0) {
+							ApplyRecycleValueOverrides(items);
+							ApplyRecycleOutputOverrides(items);
+							ApplyCraftingUsageOverrides(items);
+							ApplyCraftingKeepOverrides(items);
+							EnsureOverrideWatchers();
+							return items;
+						}
 					}
+				} catch (Exception downloadEx) {
+					Logger.LogWarning($"Failed to download RaidTheory data: {downloadEx.Message}");
 				}
 				return new List<ArcItem>();
 			}
@@ -132,7 +141,11 @@ public static class ArcRaidersData {
 			
 			// Start async data download in background for future use
 			_ = Task.Run(async () => {
-				await RaidTheoryDataSource.EnsureDataAsync().ConfigureAwait(false);
+				try {
+					await RaidTheoryDataSource.EnsureDataAsync().ConfigureAwait(false);
+				} catch (Exception ex) {
+					Logger.LogDebug($"Background data refresh failed: {ex.Message}");
+				}
 			});
 			
 			return legacyItems;

@@ -41,8 +41,8 @@ public static class RaidTheoryDataSource {
 			if (DateTime.TryParse(timestampStr, out DateTime lastUpdate)) {
 				return DateTime.UtcNow - lastUpdate;
 			}
-		} catch {
-			// Ignore errors
+		} catch (Exception ex) {
+			Logger.LogDebug($"Failed to read last update timestamp: {ex.Message}");
 		}
 		return null;
 	}
