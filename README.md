@@ -39,18 +39,44 @@ Rat Scanner allows you to scan items in the game and provides you with data abou
 **Note:** Unlike the original Tarkov version, Arc Raiders does not have a live market or flea market. All item values are based on static game data from the [RaidTheory/arcraiders-data][raidtheory-data] repository, which is automatically updated.
 
 ### Arc Raiders Features
-- **Recycle Recommendations**: Automatically suggests whether to recycle or keep an item based on:
+
+#### Smart Item Recommendations
+- **Player State Aware**: Recommendations factor in YOUR active quests, learned blueprints, and tracked resources
+- **Priority Markers**: ★ indicates items you're tracking or need for quests/projects
+- **Recycle Logic**: Automatically suggests whether to recycle or keep based on:
+  - Your active quests and their requirements
+  - Learned blueprints and craftable items
+  - Workbench levels and upgrade paths
   - Item value per inventory slot
-  - Quest requirements
-  - Base building requirements
   - Crafting usage and recipes
-  - Static item values (no market prices)
-- **Comprehensive Data**: Powered by the [RaidTheory/arcraiders-data][raidtheory-data] repository, providing:
-  - 500+ items with detailed information
-  - Trader exchange data
-  - Skill tree information
-  - Hideout module upgrade paths
-  - AI-upscaled item images
+
+#### Quest & Progress Tracking
+- **Quest Manager**: Track 100+ quests with objectives and rewards
+- **Active Quest Display**: See your current quests in a persistent overlay
+- **Quest Browser**: Browse and activate quests filtered by trader
+- **Automatic Detection**: Screen capture detects quest menu (framework ready)
+
+#### Workbench & Blueprint System
+- **Level Tracking**: Manage levels for all 9 hideout modules
+- **Blueprint Library**: Track learned projects and their requirements
+- **Upgrade Requirements**: See exactly what you need for next level
+- **Crafting Intelligence**: Know which items you can actually craft
+
+#### Map & Minimap Overlays
+- **Always-Visible Minimap**: Real-time position tracking in top-right corner
+- **Loot Indicators**: Nearby items with rarity color-coding
+- **Interactive Full Map**: Zoomable map with loot spawns and quest markers
+- **Position Tracking**: Player location with pulsing marker (📍)
+
+#### Comprehensive Data
+Powered by the [RaidTheory/arcraiders-data][raidtheory-data] repository:
+- 500+ items with detailed information
+- 100+ quests from all traders
+- Trader exchange data for all NPCs
+- Skill tree with 50+ nodes
+- Hideout module upgrade paths
+- 5 maps with event schedules
+- AI-upscaled item images from arctracker.io
 
 <br/>
 
