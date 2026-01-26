@@ -1,34 +1,56 @@
 @using RatScanner
+@using System.Windows.Forms
 @inject IJSRuntime JS
 @inject RatScannerMain RatScanner
+@inject RatScanner.VirtualScreenOffset VirtualScreenOffset
+@implements IDisposable
 
-<div class="minimap-container @(IsVisible ? "visible" : "hidden")">
-    @if (MinimapData != null)
+<div class="minimap-container @(IsVisible ? "visible" : "hidden")" style="@ContainerStyle">
+    @if (IsInRaid && MinimapData != null)
     {
         <div class="minimap">
             <div class="minimap-header">
                 <span class="map-name">@MinimapData.MapName</span>
-                <div>
-                     <button @onclick="StartCalibration" class="btn-expand mr-1" title="Calibrate Position">🎯</button>
-                     <button @onclick="ToggleFullMap" class="btn-expand">🗺️</button>
+            </div>
+            
+            <div class="minimap-display">
+                <div class="minimap-map-layer" style="@MinimapLayerStyle background-image: url('@MinimapData.MapImageUrl');">
+                    <!-- Player marker fixed at center -->
+                    <div class="player-marker-center"></div>
+				
+                    @foreach (var loot in MinimapData.NearbyLoot)
+                    {
+                        <div class="loot-marker @GetRarityClass(loot.Rarity)"
+                             style="left: @(loot.X)%; top: @(loot.Y)%;"
+                             title="@loot.ItemType">
+                            ⭐
+                        </div>
+                    }
                 </div>
             </div>
             
-            <div class="minimap-display" style="background-image: url('@MinimapData.MapImageUrl');">
-                <div class="player-marker" 
-                     style="left: @(MinimapData.PlayerX)%; top: @(MinimapData.PlayerY)%;">
-                    📍
+            @* Quest List Below Map *@
+            @if (MinimapData.ActiveQuests.Any())
+            {
+                <div class="quest-list">
+                    <div class="quest-list-header">Active Quests</div>
+                    @foreach (var quest in MinimapData.ActiveQuests.Take(4))
+                    {
+                        <div class="quest-item">
+                            <span class="quest-name">@quest.QuestName</span>
+                            @if (quest.Objectives.Any())
+                            {
+                                @foreach (var obj in quest.Objectives.Take(2))
+                                {
+                                    <div class="quest-objective @(obj.IsCompleted ? "completed" : "")">
+                                        @(obj.IsCompleted ? "✓" : "○") @obj.Description
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
                 </div>
-                
-                @foreach (var loot in MinimapData.NearbyLoot)
-                {
-                    <div class="loot-marker @GetRarityClass(loot.Rarity)"
-                         style="left: @(loot.X)%; top: @(loot.Y)%;"
-                         title="@loot.ItemType">
-                        ⭐
-                    </div>
-                }
-            </div>
+            }
             
             @if (MinimapData.NearbyLoot.Any())
             {
@@ -44,186 +66,122 @@
             }
         </div>
     }
+    else if (!IsInRaid)
+    {
+        <div class="minimap">
+            <div class="minimap-header">
+                <span class="map-name">Main Menu</span>
+            </div>
+            <div class="quest-list">
+                <div class="quest-list-header">Active Quests</div>
+                @foreach (var quest in GetActiveQuestSummaries().Take(6))
+                {
+                    <div class="quest-item">
+                        <span class="quest-name">@quest</span>
+                    </div>
+                }
+                @if (!GetActiveQuestSummaries().Any())
+                {
+                    <div class="quest-item">
+                        <span class="quest-name">No active quests</span>
+                    </div>
+                }
+            </div>
+            <div class="nearby-loot-list">
+                <div class="list-header">Craftables known:</div>
+                <div class="loot-item">@GetCraftableCount() items</div>
+            </div>
+        </div>
+    }
     else
     {
         <div class="minimap-disabled">
             <p>Position Unknown</p>
-            <small>Enter a raid or </small>
-            <button @onclick="StartCalibration" class="btn-link">Calibrate Manually</button>
+            <small>Auto-detecting map…</small>
         </div>
     }
 </div>
-
-@if (ShowCalibrationDialog)
-{
-    <div class="fullmap-modal" @onclick="CancelCalibration">
-        <div class="fullmap-content" style="width: 400px; height: auto; text-align: center;" @onclick:stopPropagation="true">
-            <button @onclick="CancelCalibration" class="btn-close">×</button>
-            <h2 style="color: #4a9eff;">Calibrate Position</h2>
-            <div style="color: #ccc; margin: 20px 0;">
-                <p>1. Open your in-game map (M).</p>
-                <p>2. Ensure the map is fully visible.</p>
-                <p>3. Click "Scan" below.</p>
-            </div>
-            <div style="display: flex; justify-content: center; gap: 10px;">
-                <button @onclick="ConfirmCalibration" class="btn-zoom" style="padding: 10px 30px; font-size: 1.1em;">SCAN NOW</button>
-            </div>
-        </div>
-    </div>
-}
-
-@if (IsCalibrating)
-{
-    <div class="fullmap-modal">
-        <div style="background: rgba(20, 20, 30, 0.9); padding: 20px; border-radius: 8px; border: 2px solid #4a9eff; text-align: center;">
-            <h2 style="color: #4a9eff; margin: 0;">Scanning Screen...</h2>
-            <p style="color: #ccc;">Please wait</p>
-        </div>
-    </div>
-}
-
-@if (ShowFullMap)
-{
-    <div class="fullmap-modal" @onclick="() => ShowFullMap = false">
-        <div class="fullmap-content" @onclick:stopPropagation="true">
-            <button @onclick="() => ShowFullMap = false" class="btn-close">×</button>
-            <h2>@(FullMapData?.MapName ?? "Map")</h2>
-            
-            @if (FullMapData != null)
-            {
-                <div class="map-controls">
-                    <button @onclick="ZoomIn" class="btn-zoom">+</button>
-                    <button @onclick="ZoomOut" class="btn-zoom">-</button>
-                    <button @onclick="ResetZoom" class="btn-zoom">Reset</button>
-                    
-                    <label>
-                        <input type="checkbox" @bind="ShowLootSpawns" /> Show Loot Spawns
-                    </label>
-                    <label>
-                        <input type="checkbox" @bind="ShowQuestMarkers" /> Show Quest Markers
-                    </label>
-                </div>
-                
-                <div class="fullmap-display" style="background-image: url('@FullMapData.MapImageUrl'); transform: scale(@ZoomLevel);">
-                    @if (FullMapData.PlayerPosition != null)
-                    {
-                        <div class="player-marker-large" 
-                             style="left: @(FullMapData.PlayerPosition.X)%; top: @(FullMapData.PlayerPosition.Y)%;">
-                            📍 YOU
-                        </div>
-                    }
-                    
-                    @if (ShowLootSpawns)
-                    {
-                        @foreach (var loot in FullMapData.LootSpawns)
-                        {
-                            <div class="loot-spawn @GetRarityClass(loot.Rarity)"
-                                 style="left: @(loot.X)%; top: @(loot.Y)%;"
-                                 title="@loot.ItemType">
-                                💎
-                            </div>
-                        }
-                    }
-                    
-                    @if (ShowQuestMarkers)
-                    {
-                        @foreach (var quest in FullMapData.QuestLocations)
-                        {
-                            <div class="quest-marker"
-                                 style="left: @(quest.X)%; top: @(quest.Y)%;"
-                                 title="@quest.QuestName - @quest.Objective">
-                                ❗
-                            </div>
-                        }
-                    }
-                </div>
-                
-                <div class="map-legend">
-                    <div class="legend-item"><span class="marker player">📍</span> Your Position</div>
-                    <div class="legend-item"><span class="marker quest">❗</span> Quest Objective</div>
-                    <div class="legend-item"><span class="marker loot">💎</span> Loot Spawn</div>
-                </div>
-            }
-        </div>
-    </div>
-}
 
 @code {
     [Parameter]
     public bool IsVisible { get; set; } = true;
     
     private MapOverlayManager.MinimapData? MinimapData;
-    private MapOverlayManager.InteractiveMapData? FullMapData;
-    private bool ShowFullMap = false;
-    private bool ShowCalibrationDialog = false;
-    private bool IsCalibrating = false;
-    private bool ShowLootSpawns = true;
-    private bool ShowQuestMarkers = true;
-    private double ZoomLevel = 1.0;
+    private bool IsInRaid = true;
+    private double MinimapZoom = 7.5; // Zoomed in 3x more (was 2.5)
+    private string MinimapLayerStyle = "";
+    private System.Threading.Timer? _refreshTimer;
+
+    // Position
+    private string ContainerStyle = "";
     
     private readonly MapOverlayManager _mapManager = MapOverlayManager.Instance;
     
     protected override void OnInitialized()
     {
+        UpdatePosition();
         RefreshMinimap();
         
-        var timer = new System.Threading.Timer(_ => {
+        _refreshTimer = new System.Threading.Timer(_ => {
             InvokeAsync(() => {
                 RefreshMinimap();
                 StateHasChanged();
             });
-        }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
-    }
-    
-    private void StartCalibration()
-    {
-        ShowCalibrationDialog = true;
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
 
-    private void CancelCalibration()
+    public void Dispose()
     {
-        ShowCalibrationDialog = false;
+        _refreshTimer?.Dispose();
+        _refreshTimer = null;
     }
 
-    private async Task ConfirmCalibration()
+    private void UpdatePosition()
     {
-        ShowCalibrationDialog = false;
-        IsCalibrating = true;
-        StateHasChanged();
-        
-        // Wait a tiny bit for UI update
-        await Task.Delay(100);
-        
-        bool success = await RatScanner.StateDetectionManager.RunManualMapCalibration();
-        
-        IsCalibrating = false;
-        if (success)
+        try
         {
-            RefreshMinimap();
+            var screen = Screen.PrimaryScreen;
+            if (screen == null)
+            {
+                ContainerStyle = "right: 20px; top: 20px;";
+                return;
+            }
+            // Place top right of primary screen
+            var width = 250; 
+            var left = screen.Bounds.Right - VirtualScreenOffset.XOffset - width - 40; 
+            var top = screen.Bounds.Top - VirtualScreenOffset.YOffset + 20;
+            
+            ContainerStyle = $"left: {left}px; top: {top}px;";
         }
-        else
+        catch (Exception)
         {
-             // Could show error toast here
+            // Fallback
+            ContainerStyle = "right: 20px; top: 20px;";
         }
-        StateHasChanged();
     }
     
     private void RefreshMinimap()
     {
         MinimapData = _mapManager.GenerateMinimapData();
+        IsInRaid = _mapManager.IsInRaid;
+        UpdateMinimapLayerStyle();
     }
     
-    private void ToggleFullMap()
+    private void UpdateMinimapLayerStyle()
     {
-        if (MinimapData == null) return;
-        
-        FullMapData = _mapManager.GenerateInteractiveMapData(MinimapData.MapId);
-        ShowFullMap = true;
+        if (MinimapData == null)
+        {
+            MinimapLayerStyle = $"transform: scale({MinimapZoom.ToString(System.Globalization.CultureInfo.InvariantCulture)}); ";
+            return;
+        }
+
+        // Center the map on the detected player position
+        // Map is zoomed and translated so player position appears at center of minimap
+        string zoom = MinimapZoom.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string playerX = MinimapData.PlayerX.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string playerY = MinimapData.PlayerY.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        MinimapLayerStyle = $"transform: translate(50%, 50%) scale({zoom}) translate(-{playerX}%, -{playerY}%); ";
     }
-    
-    private void ZoomIn() => ZoomLevel = Math.Min(3.0, ZoomLevel + 0.25);
-    private void ZoomOut() => ZoomLevel = Math.Max(0.5, ZoomLevel - 0.25);
-    private void ResetZoom() => ZoomLevel = 1.0;
     
     private string GetRarityClass(string rarity)
     {
@@ -236,15 +194,32 @@
             _ => "rarity-common"
         };
     }
+
+    private IEnumerable<string> GetActiveQuestSummaries()
+    {
+        var state = PlayerStateManager.GetState();
+        foreach (var questId in state.ActiveQuests)
+        {
+            var quest = ArcRaidersData.GetQuestById(questId);
+            if (quest != null)
+            {
+                yield return quest.GetName();
+            }
+        }
+    }
+
+    private int GetCraftableCount()
+    {
+        return PlayerStateManager.GetCraftableItems().Count;
+    }
 }
 
 <style>
     .minimap-container {
         position: fixed;
-        top: 20px;
-        right: 20px;
         z-index: 900;
         transition: opacity 0.3s;
+        pointer-events: none;
     }
     
     .minimap-container.hidden {
@@ -269,31 +244,38 @@
         font-weight: bold;
     }
     
-    .btn-expand {
-        background: none;
-        border: 1px solid #4a9eff;
-        color: #4a9eff;
-        padding: 3px 8px;
-        border-radius: 4px;
-        cursor: pointer;
-    }
     
     .minimap-display {
         width: 100%;
         height: 230px;
-        background-size: cover;
-        background-position: center;
         border-radius: 6px;
         position: relative;
         border: 1px solid #555;
+        overflow: hidden;
+        background: #0e0e12;
+    }
+
+    .minimap-map-layer {
+        position: absolute;
+        inset: 0;
+        background-size: 100% 100%;
+        background-repeat: no-repeat;
+        background-position: center;
+        transform-origin: top left;
     }
     
-    .player-marker {
+    .player-marker-center {
         position: absolute;
-        font-size: 20px;
+        left: 50%;
+        top: 50%;
+        width: 8px;
+        height: 8px;
+        background: #4FC3F7;
+        border: 2px solid #FFF;
+        border-radius: 50%;
         transform: translate(-50%, -50%);
-        filter: drop-shadow(0 0 3px #fff);
-        animation: pulse 1.5s ease-in-out infinite;
+        box-shadow: 0 0 6px rgba(79, 195, 247, 0.8);
+        z-index: 100;
     }
     
     @@keyframes pulse {
@@ -333,6 +315,49 @@
         padding: 2px;
     }
     
+    .quest-list {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #555;
+        font-size: 0.85em;
+        color: #ccc;
+        max-height: 150px;
+        overflow-y: auto;
+    }
+    
+    .quest-list-header {
+        color: #ffc107;
+        font-weight: bold;
+        margin-bottom: 6px;
+        font-size: 0.9em;
+    }
+    
+    .quest-item {
+        margin-bottom: 8px;
+        padding: 4px 6px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+        border-left: 2px solid #ffc107;
+    }
+    
+    .quest-name {
+        font-weight: bold;
+        color: #fff;
+        display: block;
+        margin-bottom: 2px;
+    }
+    
+    .quest-objective {
+        font-size: 0.85em;
+        color: #aaa;
+        margin-left: 8px;
+    }
+    
+    .quest-objective.completed {
+        color: #4caf50;
+        text-decoration: line-through;
+    }
+    
     .minimap-disabled {
         background: rgba(20, 20, 30, 0.95);
         border: 2px solid #666;
@@ -342,140 +367,4 @@
         color: #999;
     }
     
-    .fullmap-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.9);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-    }
-    
-    .fullmap-content {
-        background: rgba(20, 20, 30, 0.98);
-        border: 3px solid #4a9eff;
-        border-radius: 12px;
-        padding: 20px;
-        width: 90vw;
-        height: 90vh;
-        position: relative;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .fullmap-content h2 {
-        color: #4a9eff;
-        margin: 0 0 15px 0;
-    }
-    
-    .btn-close {
-        position: absolute;
-        top: 15px;
-        right: 15px;
-        background: #f44;
-        border: none;
-        color: #fff;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        cursor: pointer;
-        font-size: 24px;
-        z-index: 10;
-    }
-    
-    .map-controls {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        margin-bottom: 15px;
-        padding: 10px;
-        background: rgba(40, 40, 50, 0.8);
-        border-radius: 6px;
-    }
-    
-    .btn-zoom {
-        background: #4a9eff;
-        border: none;
-        color: #fff;
-        padding: 8px 15px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
-    }
-
-    .btn-link {
-        background: none;
-        border: none;
-        color: #4a9eff;
-        text-decoration: underline;
-        cursor: pointer;
-        padding: 0;
-        margin-left: 5px;
-    }
-    
-    .map-controls label {
-        color: #fff;
-        margin-left: 15px;
-    }
-    
-    .fullmap-display {
-        flex: 1;
-        background-size: contain;
-        background-position: center;
-        background-repeat: no-repeat;
-        border-radius: 8px;
-        position: relative;
-        overflow: auto;
-        border: 2px solid #555;
-    }
-    
-    .player-marker-large {
-        position: absolute;
-        font-size: 24px;
-        color: #0f0;
-        font-weight: bold;
-        transform: translate(-50%, -50%);
-        filter: drop-shadow(0 0 5px #0f0);
-        animation: pulse 1.5s ease-in-out infinite;
-    }
-    
-    .loot-spawn {
-        position: absolute;
-        font-size: 16px;
-        transform: translate(-50%, -50%);
-        cursor: help;
-    }
-    
-    .quest-marker {
-        position: absolute;
-        font-size: 20px;
-        color: #ffd700;
-        transform: translate(-50%, -50%);
-        filter: drop-shadow(0 0 3px #ffd700);
-        cursor: help;
-    }
-    
-    .map-legend {
-        display: flex;
-        gap: 20px;
-        padding: 10px;
-        background: rgba(40, 40, 50, 0.9);
-        border-radius: 6px;
-        margin-top: 10px;
-        color: #fff;
-    }
-    
-    .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    
-    .marker {
-        font-size: 18px;
-    }
 </style>

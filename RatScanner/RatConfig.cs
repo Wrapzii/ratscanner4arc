@@ -91,6 +91,7 @@ internal static class RatConfig {
 
 	// Overlay options
 	internal static class Overlay {
+		internal static bool ExcludeFromCapture = false;
 		internal static class Search {
 			internal static bool Enable = false; // Disabled by default
 			internal static bool BlurBehind = true;
@@ -188,6 +189,7 @@ internal static class RatConfig {
 		MinimalUi.Opacity = config.ReadInt(nameof(MinimalUi.Opacity), MinimalUi.Opacity);
 
 		config.Section = nameof(Overlay);
+		Overlay.ExcludeFromCapture = config.ReadBool(nameof(Overlay.ExcludeFromCapture), Overlay.ExcludeFromCapture);
 
 		config.Section = nameof(Overlay.Search);
 		Overlay.Search.Enable = config.ReadBool(nameof(Overlay.Search.Enable), Overlay.Search.Enable);
@@ -252,6 +254,7 @@ internal static class RatConfig {
 		config.WriteInt(nameof(MinimalUi.Opacity), MinimalUi.Opacity);
 
 		config.Section = nameof(Overlay);
+		config.WriteBool(nameof(Overlay.ExcludeFromCapture), Overlay.ExcludeFromCapture);
 
 		config.Section = nameof(Overlay.Search);
 		config.WriteBool(nameof(Overlay.Search.Enable), Overlay.Search.Enable);

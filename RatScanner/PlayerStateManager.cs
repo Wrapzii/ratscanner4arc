@@ -44,9 +44,50 @@ public static class PlayerStateManager {
 		public HashSet<string> LearnedBlueprints { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 		
 		/// <summary>
+		/// Skill tree branch points (branch name -> total points)
+		/// Branches: Conditioning, Mobility, Survival
+		/// </summary>
+		public Dictionary<string, int> SkillTreeBranches { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+		
+		/// <summary>
+		/// Available skill points to allocate
+		/// </summary>
+		public int AvailableSkillPoints { get; set; } = 0;
+		
+		/// <summary>
+		/// Currently queued map ID (when in matchmaking)
+		/// </summary>
+		public string? QueuedMapId { get; set; }
+		
+		/// <summary>
+		/// Currently queued map name (when in matchmaking)
+		/// </summary>
+		public string? QueuedMapName { get; set; }
+		
+		/// <summary>
 		/// Last updated timestamp
 		/// </summary>
 		public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+		
+		/// <summary>
+		/// Last detected UI state name
+		/// </summary>
+		public string? LastDetectedState { get; set; }
+		
+		/// <summary>
+		/// Whether we are currently considered in-raid
+		/// </summary>
+		public bool IsInRaid { get; set; }
+		
+		/// <summary>
+		/// Craftable items by station/module ID
+		/// </summary>
+		public Dictionary<string, List<string>> CraftableItemsByStation { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+		
+		/// <summary>
+		/// All craftable item IDs detected so far
+		/// </summary>
+		public HashSet<string> CraftableItems { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 	}
 	
 	/// <summary>
@@ -101,6 +142,21 @@ public static class PlayerStateManager {
 	/// </summary>
 	public static PlayerState GetState() {
 		return LoadState();
+	}
+
+	/// <summary>
+	/// Update the current UI state and raid status
+	/// </summary>
+	public static void SetUiState(StateDetectionManager.DetectedState state, bool isInRaid) {
+		var playerState = LoadState();
+		lock (StateLock) {
+			string stateName = state.ToString();
+			if (playerState.LastDetectedState != stateName || playerState.IsInRaid != isInRaid) {
+				playerState.LastDetectedState = stateName;
+				playerState.IsInRaid = isInRaid;
+				SaveState();
+			}
+		}
 	}
 	
 	// Quest management
@@ -199,6 +255,40 @@ public static class PlayerStateManager {
 		}
 	}
 	
+	/// <summary>
+	/// Set craftable items detected for a station/module
+	/// </summary>
+	public static void SetCraftableItems(string? stationId, IEnumerable<string> itemIds) {
+		var state = LoadState();
+		if (string.IsNullOrWhiteSpace(stationId)) {
+			stationId = "unknown";
+		}
+		var newSet = new HashSet<string>(itemIds, StringComparer.OrdinalIgnoreCase);
+		lock (StateLock) {
+			state.CraftableItemsByStation.TryGetValue(stationId, out var existingList);
+			var existingSet = existingList == null
+				? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+				: new HashSet<string>(existingList, StringComparer.OrdinalIgnoreCase);
+			
+			if (!newSet.SetEquals(existingSet)) {
+				state.CraftableItemsByStation[stationId] = newSet.ToList();
+				foreach (var itemId in newSet) {
+					state.CraftableItems.Add(itemId);
+				}
+				SaveState();
+				Logger.LogInfo($"Craftables updated for {stationId}: {newSet.Count} items");
+			}
+		}
+	}
+
+	/// <summary>
+	/// Get all craftable item IDs
+	/// </summary>
+	public static HashSet<string> GetCraftableItems() {
+		var state = LoadState();
+		return new HashSet<string>(state.CraftableItems, StringComparer.OrdinalIgnoreCase);
+	}
+	
 	public static int GetWorkbenchLevel(string workbenchId) {
 		var state = LoadState();
 		return state.WorkbenchLevels.GetValueOrDefault(workbenchId, 0);
@@ -289,6 +379,117 @@ public static class PlayerStateManager {
 		if (projectItems.ContainsKey(itemId)) return true;
 		
 		return false;
+	}
+	
+	// Skill Tree management
+	
+	/// <summary>
+	/// Set skill tree branch points and available points
+	/// </summary>
+	public static void SetSkillTreeData(Dictionary<string, int> branchPoints, int availablePoints) {
+		var state = LoadState();
+		lock (StateLock) {
+			bool changed = false;
+			
+			// Update branch points
+			foreach (var kvp in branchPoints) {
+				if (!state.SkillTreeBranches.TryGetValue(kvp.Key, out int existing) || existing != kvp.Value) {
+					state.SkillTreeBranches[kvp.Key] = kvp.Value;
+					changed = true;
+				}
+			}
+			
+			// Update available points
+			if (state.AvailableSkillPoints != availablePoints) {
+				state.AvailableSkillPoints = availablePoints;
+				changed = true;
+			}
+			
+			if (changed) {
+				SaveState();
+				Logger.LogDebug($"Skill tree data updated: {branchPoints.Count} branches, {availablePoints} available");
+			}
+		}
+	}
+	
+	/// <summary>
+	/// Get skill points for a specific branch
+	/// </summary>
+	public static int GetBranchPoints(string branchName) {
+		var state = LoadState();
+		return state.SkillTreeBranches.GetValueOrDefault(branchName, 0);
+	}
+	
+	/// <summary>
+	/// Get all skill tree branch data
+	/// </summary>
+	public static Dictionary<string, int> GetAllBranchPoints() {
+		var state = LoadState();
+		return new Dictionary<string, int>(state.SkillTreeBranches, StringComparer.OrdinalIgnoreCase);
+	}
+	
+	/// <summary>
+	/// Get available skill points
+	/// </summary>
+	public static int GetAvailableSkillPoints() {
+		var state = LoadState();
+		return state.AvailableSkillPoints;
+	}
+	
+	/// <summary>
+	/// Get total skill points (sum of all branches)
+	/// </summary>
+	public static int GetTotalSkillPoints() {
+		var state = LoadState();
+		return state.SkillTreeBranches.Values.Sum();
+	}
+	
+	// Queue/Matchmaking management
+	
+	/// <summary>
+	/// Set the queued map when entering matchmaking
+	/// </summary>
+	public static void SetQueuedMap(string mapId, string mapName) {
+		var state = LoadState();
+		lock (StateLock) {
+			if (state.QueuedMapId != mapId || state.QueuedMapName != mapName) {
+				state.QueuedMapId = mapId;
+				state.QueuedMapName = mapName;
+				SaveState();
+				Logger.LogDebug($"Queued map set: {mapName} ({mapId})");
+			}
+		}
+	}
+	
+	/// <summary>
+	/// Get the currently queued map ID
+	/// </summary>
+	public static string? GetQueuedMapId() {
+		var state = LoadState();
+		return state.QueuedMapId;
+	}
+	
+	/// <summary>
+	/// Get the currently queued map name
+	/// </summary>
+	public static string? GetQueuedMapName() {
+		var state = LoadState();
+		return state.QueuedMapName;
+	}
+	
+	/// <summary>
+	/// Clear queued map (when leaving queue or entering raid)
+	/// </summary>
+	public static void ClearQueuedMap() {
+		var state = LoadState();
+		lock (StateLock) {
+			if (state.QueuedMapId != null || state.QueuedMapName != null) {
+				state.QueuedMapId = null;
+				state.QueuedMapName = null;
+				SaveState();
+				Logger.LogDebug("Queued map cleared");
+			}
+		}
 	}
 	
 	/// <summary>

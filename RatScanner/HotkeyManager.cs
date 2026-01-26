@@ -86,31 +86,43 @@ internal class HotkeyManager {
 		if (!RatConfig.Map.UseHoldToCalibrate || _calibrationHoldCts != null) return;
 		
 		// Check if the pressed key matches the configured hold key
-		// We only support single-key hold logic for stability
 		var holdKey = RatConfig.Map.CalibrateHoldHotkey.KeyboardKeys.FirstOrDefault();
 		if (holdKey == Key.None) return;
 
-		if (e.Key == holdKey) {
+		// Handle Alt key specifically as it can appear as System or LeftAlt/RightAlt
+		bool isMatch = e.Key == holdKey;
+		if (!isMatch && (holdKey == Key.LeftAlt || holdKey == Key.RightAlt)) {
+			isMatch = e.Key == Key.System || e.Key == Key.LeftAlt || e.Key == Key.RightAlt;
+		}
+
+		if (isMatch) {
 			_calibrationHoldCts = new CancellationTokenSource();
 			var token = _calibrationHoldCts.Token;
+            
+            // Log start of hold
+			Logger.LogDebug($"[Hold] Started hold for {e.Key} (Timeout: {RatConfig.Map.CalibrateHoldDurationMs}ms)");
 
 			Task.Run(async () => {
 				try {
 					int duration = RatConfig.Map.CalibrateHoldDurationMs;
-					Logger.LogDebug($"Hold {e.Key} for {duration}ms to calibrate...");
-					await Task.Delay(duration, token);
+					int elapsed = 0;
+					const int stepMs = 50;
+					while (elapsed < duration && !token.IsCancellationRequested) {
+						await Task.Delay(stepMs).ConfigureAwait(false);
+						elapsed += stepMs;
+					}
 					
 					if (!token.IsCancellationRequested) {
-						Logger.LogInfo("Calibration hold complete. Triggering...");
-						await RatScannerMain.Instance.StateDetectionManager.RunManualMapCalibration();
+						Logger.LogInfo("[Hold] Calibration hold complete. Triggering...");
+						// Use dispatcher just in case, though mostly thread safe
+						Application.Current.Dispatcher.Invoke(() => {
+						    _ = RatScannerMain.Instance.StateDetectionManager.RunManualMapCalibration();
+						});
+						
+						// play a sound or notification?
 					}
-				} catch (TaskCanceledException) {
-					// Expected when key is released early
-					Logger.LogDebug("Calibration hold cancelled.");
 				} finally {
 					// Reset CTS if we finished (successful or valid cancel) 
-					// But we need to be careful not to null out a NEW cts if this was a race, 
-					// though single threading of UI events usually prevents this.
 					if (_calibrationHoldCts?.Token == token) {
 						_calibrationHoldCts = null;
 					}
@@ -123,7 +135,14 @@ internal class HotkeyManager {
 		if (_calibrationHoldCts == null) return;
 		
 		var holdKey = RatConfig.Map.CalibrateHoldHotkey.KeyboardKeys.FirstOrDefault();
-		if (e.Key == holdKey) {
+		
+		bool isMatch = e.Key == holdKey;
+		if (!isMatch && (holdKey == Key.LeftAlt || holdKey == Key.RightAlt)) {
+			isMatch = e.Key == Key.System || e.Key == Key.LeftAlt || e.Key == Key.RightAlt;
+		}
+
+		if (isMatch) {
+			Logger.LogDebug($"[Hold] Key {e.Key} released. Cancelling hold.");
 			CancelCalibrationHold();
 		}
 	}

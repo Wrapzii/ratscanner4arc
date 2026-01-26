@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace RatScanner;
@@ -299,13 +300,76 @@ public static class RaidTheoryDataSource {
 			public string? Description { get; set; }
 			public int Level { get; set; } = 1;
 			public List<string>? OtherRequirements { get; set; }
-			public List<string>? RequirementItemIds { get; set; }
+			public List<RequirementItem>? RequirementItemIds { get; set; }
+		}
+		
+		[JsonConverter(typeof(HideoutRequirementItemConverter))]
+		public class RequirementItem {
+			public string ItemId { get; set; } = "";
+			public int Quantity { get; set; } = 1;
 		}
 		
 		/// <summary>
 		/// Get name in English
 		/// </summary>
 		public string GetName() => Name?.GetValueOrDefault("en", Id) ?? Id;
+	}
+	
+	private sealed class HideoutRequirementItemConverter : JsonConverter<RaidTheoryHideoutModule.RequirementItem> {
+		public override RaidTheoryHideoutModule.RequirementItem Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
+			switch (reader.TokenType) {
+				case JsonTokenType.String: {
+					var itemId = reader.GetString() ?? "";
+					return new RaidTheoryHideoutModule.RequirementItem {
+						ItemId = itemId,
+						Quantity = 1
+					};
+				}
+				case JsonTokenType.StartObject: {
+					using var doc = JsonDocument.ParseValue(ref reader);
+					var root = doc.RootElement;
+					string itemId = "";
+					int quantity = 1;
+					
+					if (TryGetPropertyIgnoreCase(root, "itemId", out var itemIdProp) && itemIdProp.ValueKind == JsonValueKind.String) {
+						itemId = itemIdProp.GetString() ?? "";
+					} else if (TryGetPropertyIgnoreCase(root, "id", out var idProp) && idProp.ValueKind == JsonValueKind.String) {
+						itemId = idProp.GetString() ?? "";
+					}
+					
+					if (TryGetPropertyIgnoreCase(root, "quantity", out var quantityProp) && quantityProp.ValueKind == JsonValueKind.Number) {
+						if (quantityProp.TryGetInt32(out var q) && q > 0) quantity = q;
+					} else if (TryGetPropertyIgnoreCase(root, "count", out var countProp) && countProp.ValueKind == JsonValueKind.Number) {
+						if (countProp.TryGetInt32(out var c) && c > 0) quantity = c;
+					}
+					
+					return new RaidTheoryHideoutModule.RequirementItem {
+						ItemId = itemId,
+						Quantity = quantity
+					};
+				}
+				default:
+					throw new JsonException($"Unexpected token {reader.TokenType} when parsing hideout requirement item.");
+			}
+		}
+		
+		public override void Write(Utf8JsonWriter writer, RaidTheoryHideoutModule.RequirementItem value, JsonSerializerOptions options) {
+			writer.WriteStartObject();
+			writer.WriteString("itemId", value.ItemId);
+			writer.WriteNumber("quantity", value.Quantity);
+			writer.WriteEndObject();
+		}
+		
+		private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement value) {
+			foreach (var prop in element.EnumerateObject()) {
+				if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase)) {
+					value = prop.Value;
+					return true;
+				}
+			}
+			value = default;
+			return false;
+		}
 	}
 	
 	/// <summary>
@@ -508,10 +572,54 @@ public static class RaidTheoryDataSource {
 			}) ?? new List<RaidTheoryMap>();
 			
 			Logger.LogInfo($"Loaded {maps.Count} maps from RaidTheory data");
+			CacheMapImages(maps);
 		} catch (Exception ex) {
 			Logger.LogError($"Failed to load maps from RaidTheory data: {ex.Message}");
 		}
 		
 		return maps;
+	}
+
+	public static void CacheMapImages(IEnumerable<RaidTheoryMap> maps) {
+		try {
+			foreach (var map in maps) {
+				if (string.IsNullOrWhiteSpace(map.Image)) continue;
+				if (Uri.TryCreate(map.Image, UriKind.Absolute, out var absoluteUri)
+				    && (absoluteUri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase)
+				        || absoluteUri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase))) {
+					string fileName = Path.GetFileName(absoluteUri.LocalPath);
+					if (string.IsNullOrWhiteSpace(fileName)) continue;
+					string relPath = Path.Combine("maps", fileName);
+					string destPath = Path.Combine(RatConfig.Paths.Data, relPath);
+					Directory.CreateDirectory(Path.GetDirectoryName(destPath) ?? RatConfig.Paths.Data);
+					string cachedMapPath = Path.Combine(DataPath, "images", "maps", fileName);
+					if (File.Exists(cachedMapPath)) {
+						File.Copy(cachedMapPath, destPath, true);
+						map.Image = relPath;
+						continue;
+					}
+					if (!File.Exists(destPath)) {
+						try {
+							var bytes = HttpClient.GetByteArrayAsync(absoluteUri).GetAwaiter().GetResult();
+							File.WriteAllBytes(destPath, bytes);
+						} catch (Exception ex) {
+							Logger.LogWarning($"Failed to download map image {absoluteUri}: {ex.Message}");
+							continue;
+						}
+					}
+					map.Image = relPath;
+					continue;
+				}
+
+				string sourcePath = Path.Combine(DataPath, map.Image);
+				if (!File.Exists(sourcePath)) continue;
+
+				string destLocalPath = Path.Combine(RatConfig.Paths.Data, map.Image);
+				Directory.CreateDirectory(Path.GetDirectoryName(destLocalPath) ?? RatConfig.Paths.Data);
+				File.Copy(sourcePath, destLocalPath, true);
+			}
+		} catch (Exception ex) {
+			Logger.LogWarning($"Failed to cache map images: {ex.Message}");
+		}
 	}
 }
