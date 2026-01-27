@@ -108,7 +108,7 @@
     
     private MapOverlayManager.MinimapData? MinimapData;
     private bool IsInRaid = true;
-    private double MinimapZoom = 7.5; // Zoomed in 3x more (was 2.5)
+    private double MinimapZoom = 2.5; // More reasonable zoom level
     private string MinimapLayerStyle = "";
     private System.Threading.Timer? _refreshTimer;
 
@@ -176,11 +176,16 @@
         }
 
         // Center the map on the detected player position
-        // Map is zoomed and translated so player position appears at center of minimap
+        // With transform-origin: 0 0 and scale(zoom), a point at X%, Y% ends up at X*zoom%, Y*zoom%
+        // To center: we need left offset = 50% - X*zoom%, same for Y
         string zoom = MinimapZoom.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        string playerX = MinimapData.PlayerX.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        string playerY = MinimapData.PlayerY.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        MinimapLayerStyle = $"transform: translate(50%, 50%) scale({zoom}) translate(-{playerX}%, -{playerY}%); ";
+        
+        double offsetX = 50 - (MinimapData.PlayerX * MinimapZoom);
+        double offsetY = 50 - (MinimapData.PlayerY * MinimapZoom);
+        string offX = offsetX.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string offY = offsetY.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        
+        MinimapLayerStyle = $"transform-origin: 0 0; transform: scale({zoom}); left: {offX}%; top: {offY}%; ";
     }
     
     private string GetRarityClass(string rarity)

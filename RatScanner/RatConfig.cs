@@ -105,6 +105,13 @@ internal static class RatConfig {
 		internal static Hotkey CalibrateHoldHotkey = new(new[] { Key.LeftAlt }.ToList());
 		internal static int CalibrateHoldDurationMs = 3000; // 3 seconds hold time
 		internal static bool UseHoldToCalibrate = true; 
+		internal static Hotkey MapOpenHotkey = new(new[] { Key.M }.ToList());
+		internal static bool AutoMapCapture = false;
+		internal static int NearbyLootRadius = 100;
+		internal static bool ShowContainers = true;
+		internal static bool ShowArc = true;
+		internal static bool ShowEvents = true;
+		internal static bool ShowLocations = true;
 	}
 
 	// OAuth2 refresh tokens
@@ -201,6 +208,13 @@ internal static class RatConfig {
 		Map.CalibrateHoldHotkey = config.ReadHotkey(nameof(Map.CalibrateHoldHotkey), Map.CalibrateHoldHotkey);
 		Map.CalibrateHoldDurationMs = config.ReadInt(nameof(Map.CalibrateHoldDurationMs), Map.CalibrateHoldDurationMs);
 		Map.UseHoldToCalibrate = config.ReadBool(nameof(Map.UseHoldToCalibrate), Map.UseHoldToCalibrate);
+		Map.MapOpenHotkey = config.ReadHotkey(nameof(Map.MapOpenHotkey), Map.MapOpenHotkey);
+		Map.AutoMapCapture = config.ReadBool(nameof(Map.AutoMapCapture), Map.AutoMapCapture);
+		Map.NearbyLootRadius = config.ReadInt(nameof(Map.NearbyLootRadius), Map.NearbyLootRadius);
+		Map.ShowContainers = config.ReadBool(nameof(Map.ShowContainers), Map.ShowContainers);
+		Map.ShowArc = config.ReadBool(nameof(Map.ShowArc), Map.ShowArc);
+		Map.ShowEvents = config.ReadBool(nameof(Map.ShowEvents), Map.ShowEvents);
+		Map.ShowLocations = config.ReadBool(nameof(Map.ShowLocations), Map.ShowLocations);
 
 		config.Section = nameof(OAuthRefreshToken);
 		OAuthRefreshToken.Discord = config.ReadSecureString(nameof(OAuthRefreshToken.Discord), OAuthRefreshToken.Discord);
@@ -266,6 +280,13 @@ internal static class RatConfig {
 		config.WriteHotkey(nameof(Map.CalibrateHoldHotkey), Map.CalibrateHoldHotkey);
 		config.WriteInt(nameof(Map.CalibrateHoldDurationMs), Map.CalibrateHoldDurationMs);
 		config.WriteBool(nameof(Map.UseHoldToCalibrate), Map.UseHoldToCalibrate);
+		config.WriteHotkey(nameof(Map.MapOpenHotkey), Map.MapOpenHotkey);
+		config.WriteBool(nameof(Map.AutoMapCapture), Map.AutoMapCapture);
+		config.WriteInt(nameof(Map.NearbyLootRadius), Map.NearbyLootRadius);
+		config.WriteBool(nameof(Map.ShowContainers), Map.ShowContainers);
+		config.WriteBool(nameof(Map.ShowArc), Map.ShowArc);
+		config.WriteBool(nameof(Map.ShowEvents), Map.ShowEvents);
+		config.WriteBool(nameof(Map.ShowLocations), Map.ShowLocations);
 
 		config.Section = nameof(OAuthRefreshToken);
 		config.WriteSecureString(nameof(OAuthRefreshToken.Discord), OAuthRefreshToken.Discord);

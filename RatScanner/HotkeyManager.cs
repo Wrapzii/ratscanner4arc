@@ -13,6 +13,7 @@ namespace RatScanner;
 
 internal class HotkeyManager {
 	private long _last_mouse_click = 0;
+	private DateTime _lastMapOpenKeyUtc = DateTime.MinValue;
 
 	internal ActiveHotkey NameScanHotkey;
 	internal ActiveHotkey TooltipScanHotkey;
@@ -59,6 +60,7 @@ internal class HotkeyManager {
 		// Manual hooks for Hold-to-Calibrate logic
 		UserActivityHelper.OnKeyboardKeyDown += OnCalibrationInternalKeyDown;
 		UserActivityHelper.OnKeyboardKeyUp += OnCalibrationInternalKeyUp;
+		UserActivityHelper.OnKeyboardKeyDown += OnMapOpenInternalKeyDown;
 	}
 
 	/// <summary>
@@ -72,6 +74,7 @@ internal class HotkeyManager {
 
 		UserActivityHelper.OnKeyboardKeyDown -= OnCalibrationInternalKeyDown;
 		UserActivityHelper.OnKeyboardKeyUp -= OnCalibrationInternalKeyUp;
+		UserActivityHelper.OnKeyboardKeyDown -= OnMapOpenInternalKeyDown;
 		CancelCalibrationHold();
 	}
 
@@ -145,6 +148,26 @@ internal class HotkeyManager {
 			Logger.LogDebug($"[Hold] Key {e.Key} released. Cancelling hold.");
 			CancelCalibrationHold();
 		}
+	}
+
+	private void OnMapOpenInternalKeyDown(object? sender, KeyDownEventArgs e) {
+		if (e.Device != Device.Keyboard) return;
+		var mapKeys = RatConfig.Map.MapOpenHotkey.KeyboardKeys;
+		if (mapKeys == null || mapKeys.Count == 0) return;
+
+		// Only trigger when the pressed key is part of the hotkey and all keys are down
+		if (!mapKeys.Contains(e.Key)) return;
+		foreach (var key in mapKeys) {
+			if (!UserActivityHelper.IsKeyDown(key)) return;
+		}
+
+		// Debounce repeated keydown events
+		if ((DateTime.UtcNow - _lastMapOpenKeyUtc).TotalMilliseconds < 500) return;
+		_lastMapOpenKeyUtc = DateTime.UtcNow;
+		if (RatConfig.LogDebug) {
+			Logger.LogDebug($"Map hotkey detected: {string.Join("+", mapKeys)} (inRaid={PlayerStateManager.GetState().IsInRaid})");
+		}
+		RatScannerMain.Instance.StateDetectionManager.RequestMapCaptureFromHotkey();
 	}
 
 	private static void Wrap<T>(Func<T> func) {

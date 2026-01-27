@@ -8,6 +8,11 @@ using System.Windows.Input;
 namespace RatScanner;
 
 internal static class UserActivityHelper {
+	internal static DateTime LastInputUtc { get; private set; } = DateTime.UtcNow;
+
+	private static void MarkInput() {
+		LastInputUtc = DateTime.UtcNow;
+	}
 	[DllImport("user32.dll")]
 	private static extern int GetAsyncKeyState(int vKey);
 
@@ -253,6 +258,8 @@ internal static class UserActivityHelper {
 			return CallNextHookEx(hKeyboardHook, nCode, wParam, lParam);
 		}
 
+		MarkInput();
+
 		// Indicates if any of underlying events set the Handled flag
 		bool handled = false;
 
@@ -278,6 +285,8 @@ internal static class UserActivityHelper {
 		if (nCode < 0 || (OnMouseButtonUp == null && OnMouseButtonDown == null)) {
 			return CallNextHookEx(hKeyboardHook, nCode, wParam, lParam);
 		}
+
+		MarkInput();
 
 		// Indicates if any of underlying events set the Handled flag
 		bool handled = false;

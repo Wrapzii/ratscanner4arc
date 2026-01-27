@@ -96,6 +96,7 @@ public class RatScannerMain : INotifyPropertyChanged {
 		Logger.LogInfo("Initializing RatEye...");
 		SetupRatEye();
 		_stateDetectionManager = new StateDetectionManager();
+		_stateDetectionManager.SetAutoMapCaptureEnabled(RatConfig.Map.AutoMapCapture);
 
 		new Thread(() => {
 			Thread.Sleep(1000);

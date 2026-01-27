@@ -30,6 +30,13 @@ internal class SettingsVM : INotifyPropertyChanged {
 	public bool AlwaysOnTop { get; set; }
 	public bool LogDebug { get; set; }
 
+	// Minimap filters
+	public int MapNearbyLootRadius { get; set; }
+	public bool ShowMapContainers { get; set; }
+	public bool ShowMapArc { get; set; }
+	public bool ShowMapEvents { get; set; }
+	public bool ShowMapLocations { get; set; }
+
 	// Interactable Overlay
 	public bool EnableIneractableOverlay { get; set; }
 	public bool BlurBehindSearch { get; set; }
@@ -64,6 +71,12 @@ internal class SettingsVM : INotifyPropertyChanged {
 		MinimizeToTray = RatConfig.MinimizeToTray;
 		AlwaysOnTop = RatConfig.AlwaysOnTop;
 		LogDebug = RatConfig.LogDebug;
+
+		MapNearbyLootRadius = RatConfig.Map.NearbyLootRadius;
+		ShowMapContainers = RatConfig.Map.ShowContainers;
+		ShowMapArc = RatConfig.Map.ShowArc;
+		ShowMapEvents = RatConfig.Map.ShowEvents;
+		ShowMapLocations = RatConfig.Map.ShowLocations;
 
 		EnableIneractableOverlay = RatConfig.Overlay.Search.Enable;
 		BlurBehindSearch = RatConfig.Overlay.Search.BlurBehind;
@@ -105,6 +118,12 @@ internal class SettingsVM : INotifyPropertyChanged {
 		RatConfig.MinimizeToTray = MinimizeToTray;
 		RatConfig.AlwaysOnTop = AlwaysOnTop;
 		RatConfig.LogDebug = LogDebug;
+
+		RatConfig.Map.NearbyLootRadius = MapNearbyLootRadius;
+		RatConfig.Map.ShowContainers = ShowMapContainers;
+		RatConfig.Map.ShowArc = ShowMapArc;
+		RatConfig.Map.ShowEvents = ShowMapEvents;
+		RatConfig.Map.ShowLocations = ShowMapLocations;
 
 		// Apply config
 		PageSwitcher.Instance.Topmost = RatConfig.AlwaysOnTop;

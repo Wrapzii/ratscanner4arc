@@ -78,6 +78,26 @@ public static class PlayerStateManager {
 		/// Whether we are currently considered in-raid
 		/// </summary>
 		public bool IsInRaid { get; set; }
+
+		/// <summary>
+		/// In-raid HUD: weapon label (best-effort OCR)
+		/// </summary>
+		public string? InRaidWeaponLabel { get; set; }
+
+		/// <summary>
+		/// In-raid HUD: ammo in magazine (if detected)
+		/// </summary>
+		public int? InRaidAmmoInMag { get; set; }
+
+		/// <summary>
+		/// In-raid HUD: ammo reserve (if detected)
+		/// </summary>
+		public int? InRaidAmmoReserve { get; set; }
+
+		/// <summary>
+		/// Last time in-raid HUD info was updated
+		/// </summary>
+		public DateTime? InRaidHudUpdatedUtc { get; set; }
 		
 		/// <summary>
 		/// Craftable items by station/module ID
@@ -230,6 +250,21 @@ public static class PlayerStateManager {
 	public static bool IsResourceTracked(string itemId) {
 		var state = LoadState();
 		return state.TrackedResources.Contains(itemId);
+	}
+
+	public static void SetInRaidHud(string? weaponLabel, int? ammoInMag, int? ammoReserve) {
+		var state = LoadState();
+		lock (StateLock) {
+			bool changed = !string.Equals(state.InRaidWeaponLabel, weaponLabel, StringComparison.OrdinalIgnoreCase)
+				|| state.InRaidAmmoInMag != ammoInMag
+				|| state.InRaidAmmoReserve != ammoReserve;
+			if (!changed) return;
+			state.InRaidWeaponLabel = weaponLabel;
+			state.InRaidAmmoInMag = ammoInMag;
+			state.InRaidAmmoReserve = ammoReserve;
+			state.InRaidHudUpdatedUtc = DateTime.UtcNow;
+			SaveState();
+		}
 	}
 	
 	// Workbench management

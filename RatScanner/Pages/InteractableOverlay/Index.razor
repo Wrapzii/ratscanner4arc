@@ -49,6 +49,13 @@
                             @_calibrationResult
                         </MudText>
                     }
+                    <MudDivider Class="my-3" />
+                    <MudCheckBox Checked="@_autoMapCapture" CheckedChanged="@((bool value) => OnAutoMapCaptureChanged(value))"
+                                 Label="Auto map capture (scan map view periodically)"
+                                 Dense="true" Size="Size.Small" Class="pa-0 ma-0" />
+                    <MudText Typo="Typo.caption" Class="px-1">
+                        Disable to only capture when pressing the map hotkey.
+                    </MudText>
                 </MudPaper>
 
                 <MudStack Spacing="2" Class="py-2">
@@ -75,6 +82,7 @@
     private bool _isCalibrating = false;
     private string? _calibrationResult;
     private bool _calibrationSuccess;
+    private bool _autoMapCapture = RatConfig.Map.AutoMapCapture;
 
     private async Task CalibrateMap()
     {
@@ -93,6 +101,13 @@
         _calibrationSuccess = success;
         _calibrationResult = success ? "Calibration Successful! Map detected." : "Calibration Failed. Ensure map is visible.";
         StateHasChanged();
+    }
+
+    private void OnAutoMapCaptureChanged(bool value) {
+        _autoMapCapture = value;
+        RatScanner.StateDetectionManager.SetAutoMapCaptureEnabled(value);
+        RatConfig.Map.AutoMapCapture = value;
+        RatConfig.SaveConfig();
     }
 
     private async void ExecuteSearch(string value) {
@@ -117,6 +132,7 @@
 
     protected override void OnInitialized() {
         MenuVM.PropertyChanged += PropertyChangeHandler;
+        RatScanner.StateDetectionManager.SetAutoMapCaptureEnabled(_autoMapCapture);
     }
 
     private async void PropertyChangeHandler(object? sender, EventArgs e) {
