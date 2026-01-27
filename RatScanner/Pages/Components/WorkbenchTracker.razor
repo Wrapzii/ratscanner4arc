@@ -1,0 +1,482 @@
+@using RatScanner
+@inject IJSRuntime JS
+
+<div class="workbench-tracker">
+    <div class="tracker-header">
+        <h3>Workbench Levels</h3>
+        <button @onclick="RefreshWorkbenches" class="btn-refresh">🔄</button>
+    </div>
+    
+    <div class="workbench-list">
+        @foreach (var hideout in HideoutModules)
+        {
+            int currentLevel = PlayerStateManager.GetWorkbenchLevel(hideout.Id);
+            
+            <div class="workbench-item">
+                <div class="workbench-name">@hideout.GetName()</div>
+                <div class="level-control">
+                    <button @onclick="() => DecrementLevel(hideout.Id)" class="btn-level">−</button>
+                    <span class="level-display">Level @currentLevel / @hideout.MaxLevel</span>
+                    <button @onclick="() => IncrementLevel(hideout.Id, hideout.MaxLevel)" class="btn-level">+</button>
+                </div>
+                
+                @if (hideout.Levels != null && currentLevel < hideout.MaxLevel)
+                {
+                    var nextLevel = hideout.Levels.FirstOrDefault(l => l.Level == currentLevel + 1);
+                    if (nextLevel != null)
+                    {
+                        <div class="upgrade-info">
+                            <div class="upgrade-desc">@nextLevel.Description</div>
+                            @if (nextLevel.RequirementItemIds != null && nextLevel.RequirementItemIds.Any())
+                            {
+                                <div class="requirements">
+                                    <strong>Materials:</strong>
+                                    @foreach (var req in nextLevel.RequirementItemIds)
+                                    {
+                                        <span class="req-item">@req× item</span>
+                                    }
+                                </div>
+                            }
+                            @if (nextLevel.OtherRequirements != null && nextLevel.OtherRequirements.Any())
+                            {
+                                <div class="other-reqs">
+                                    @foreach (var req in nextLevel.OtherRequirements)
+                                    {
+                                        <span class="other-req">@req</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        }
+    </div>
+    
+    <div class="blueprint-section">
+        <div class="section-header">
+            <h3>Learned Blueprints (@LearnedBlueprints.Count)</h3>
+            <button @onclick="ShowBlueprintBrowser" class="btn-browse">Manage</button>
+        </div>
+        
+        @if (LearnedBlueprints.Any())
+        {
+            <div class="blueprint-list">
+                @foreach (var blueprintId in LearnedBlueprints.Take(5))
+                {
+                    var project = ArcRaidersData.GetProjectById(blueprintId);
+                    if (project != null)
+                    {
+                        <div class="blueprint-item">
+                            <span class="blueprint-name">✓ @project.GetName()</span>
+                        </div>
+                    }
+                }
+                @if (LearnedBlueprints.Count > 5)
+                {
+                    <div class="more-blueprints">
+                        +@(LearnedBlueprints.Count - 5) more...
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="no-blueprints">
+                <p>No blueprints learned</p>
+            </div>
+        }
+    </div>
+    
+    @if (ShowBrowser)
+    {
+        <div class="blueprint-browser-modal">
+            <div class="modal-content">
+                <h3>All Blueprints/Projects</h3>
+                <button @onclick="() => ShowBrowser = false" class="btn-close">×</button>
+                
+                <div class="all-blueprints-list">
+                    @foreach (var project in AllProjects.Where(p => !p.Disabled))
+                    {
+                        bool isLearned = PlayerStateManager.IsBlueprintLearned(project.Id);
+                        
+                        <div class="blueprint-browser-item @(isLearned ? "learned" : "")">
+                            <div class="project-info">
+                                <strong>@project.GetName()</strong>
+                                @if (isLearned)
+                                {
+                                    <span class="learned-badge">✓ Learned</span>
+                                }
+                                
+                                @if (project.Phases != null)
+                                {
+                                    <div class="phases-info">
+                                        @project.Phases.Count Phase(s)
+                                    </div>
+                                }
+                            </div>
+                            
+                            @if (isLearned)
+                            {
+                                <button @onclick="() => UnlearnBlueprint(project.Id)" class="btn-unlearn">
+                                    Unlearn
+                                </button>
+                            }
+                            else
+                            {
+                                <button @onclick="() => LearnBlueprint(project.Id)" class="btn-learn">
+                                    Learn
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<RaidTheoryDataSource.RaidTheoryHideoutModule> HideoutModules = new();
+    private List<RaidTheoryDataSource.RaidTheoryProject> AllProjects = new();
+    private List<string> LearnedBlueprints = new();
+    private bool ShowBrowser = false;
+
+    protected override void OnInitialized()
+    {
+        LoadWorkbenches();
+        LoadBlueprints();
+    }
+
+    private void LoadWorkbenches()
+    {
+        HideoutModules = ArcRaidersData.GetHideoutModules();
+    }
+
+    private void LoadBlueprints()
+    {
+        AllProjects = ArcRaidersData.GetProjects();
+        var state = PlayerStateManager.GetState();
+        LearnedBlueprints = state.LearnedBlueprints.ToList();
+    }
+
+    private void RefreshWorkbenches()
+    {
+        LoadWorkbenches();
+        StateHasChanged();
+    }
+
+    private void IncrementLevel(string workbenchId, int maxLevel)
+    {
+        int current = PlayerStateManager.GetWorkbenchLevel(workbenchId);
+        if (current < maxLevel)
+        {
+            PlayerStateManager.SetWorkbenchLevel(workbenchId, current + 1);
+            Logger.LogInfo($"{workbenchId} upgraded to level {current + 1}");
+        }
+        StateHasChanged();
+    }
+
+    private void DecrementLevel(string workbenchId)
+    {
+        int current = PlayerStateManager.GetWorkbenchLevel(workbenchId);
+        if (current > 0)
+        {
+            PlayerStateManager.SetWorkbenchLevel(workbenchId, current - 1);
+            Logger.LogInfo($"{workbenchId} downgraded to level {current - 1}");
+        }
+        StateHasChanged();
+    }
+
+    private void ShowBlueprintBrowser()
+    {
+        ShowBrowser = true;
+    }
+
+    private void LearnBlueprint(string blueprintId)
+    {
+        PlayerStateManager.LearnBlueprint(blueprintId);
+        LoadBlueprints();
+        Logger.LogInfo($"Blueprint learned: {blueprintId}");
+        StateHasChanged();
+    }
+
+    private void UnlearnBlueprint(string blueprintId)
+    {
+        PlayerStateManager.UnlearnBlueprint(blueprintId);
+        LoadBlueprints();
+        Logger.LogInfo($"Blueprint unlearned: {blueprintId}");
+        StateHasChanged();
+    }
+}
+
+<style>
+    .workbench-tracker {
+        background: rgba(20, 20, 30, 0.95);
+        border: 2px solid #ff9900;
+        border-radius: 8px;
+        padding: 15px;
+        max-width: 450px;
+        color: #fff;
+    }
+    
+    .tracker-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #ff9900;
+        padding-bottom: 10px;
+    }
+    
+    .tracker-header h3 {
+        margin: 0;
+        color: #ff9900;
+    }
+    
+    .btn-refresh {
+        background: none;
+        border: 1px solid #ff9900;
+        color: #ff9900;
+        padding: 5px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .workbench-list {
+        margin-bottom: 20px;
+    }
+    
+    .workbench-item {
+        background: rgba(40, 40, 50, 0.8);
+        border: 1px solid #555;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 10px;
+    }
+    
+    .workbench-name {
+        font-weight: bold;
+        color: #ff9900;
+        margin-bottom: 8px;
+        font-size: 1.1em;
+    }
+    
+    .level-control {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+    
+    .btn-level {
+        background: #ff9900;
+        border: none;
+        color: #fff;
+        width: 30px;
+        height: 30px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 18px;
+    }
+    
+    .level-display {
+        flex: 1;
+        text-align: center;
+        font-weight: bold;
+        color: #fff;
+    }
+    
+    .upgrade-info {
+        margin-top: 10px;
+        padding: 8px;
+        background: rgba(255, 153, 0, 0.1);
+        border-radius: 4px;
+        border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+    
+    .upgrade-desc {
+        color: #ddd;
+        font-size: 0.9em;
+        margin-bottom: 6px;
+    }
+    
+    .requirements {
+        font-size: 0.85em;
+        margin-top: 6px;
+        color: #9f9;
+    }
+    
+    .req-item {
+        display: inline-block;
+        margin-right: 8px;
+        background: rgba(50, 150, 50, 0.3);
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+    
+    .other-reqs {
+        margin-top: 4px;
+        font-size: 0.85em;
+    }
+    
+    .other-req {
+        display: inline-block;
+        margin-right: 8px;
+        color: #ffd700;
+    }
+    
+    .blueprint-section {
+        border-top: 2px solid #555;
+        padding-top: 15px;
+    }
+    
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .section-header h3 {
+        margin: 0;
+        color: #4a9eff;
+        font-size: 1.1em;
+    }
+    
+    .btn-browse {
+        background: #4a9eff;
+        border: none;
+        color: #fff;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .blueprint-list {
+        margin-top: 10px;
+    }
+    
+    .blueprint-item {
+        background: rgba(40, 40, 50, 0.6);
+        padding: 8px;
+        margin-bottom: 5px;
+        border-radius: 4px;
+        border: 1px solid #555;
+    }
+    
+    .blueprint-name {
+        color: #4f4;
+        font-size: 0.95em;
+    }
+    
+    .more-blueprints {
+        padding: 8px;
+        text-align: center;
+        color: #999;
+        font-style: italic;
+    }
+    
+    .no-blueprints {
+        text-align: center;
+        padding: 15px;
+        color: #999;
+    }
+    
+    .blueprint-browser-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    
+    .modal-content {
+        background: rgba(20, 20, 30, 0.98);
+        border: 2px solid #ff9900;
+        border-radius: 8px;
+        padding: 20px;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+        position: relative;
+    }
+    
+    .btn-close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: #f44;
+        border: none;
+        color: #fff;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 20px;
+    }
+    
+    .all-blueprints-list {
+        margin-top: 15px;
+    }
+    
+    .blueprint-browser-item {
+        background: rgba(40, 40, 50, 0.6);
+        border: 1px solid #555;
+        border-radius: 4px;
+        padding: 12px;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .blueprint-browser-item.learned {
+        border-color: #4f4;
+        background: rgba(50, 255, 50, 0.1);
+    }
+    
+    .project-info {
+        flex: 1;
+    }
+    
+    .learned-badge {
+        display: inline-block;
+        background: rgba(50, 255, 50, 0.3);
+        color: #4f4;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.8em;
+        margin-left: 10px;
+    }
+    
+    .phases-info {
+        color: #999;
+        font-size: 0.85em;
+        margin-top: 4px;
+    }
+    
+    .btn-learn {
+        background: #4a9eff;
+        border: none;
+        color: #fff;
+        padding: 6px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .btn-unlearn {
+        background: #f66;
+        border: none;
+        color: #fff;
+        padding: 6px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+</style>

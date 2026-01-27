@@ -20,7 +20,7 @@ Rat Scanner is an open source tool adapted for [Arc Raiders][arc-raiders].
 
 This is a modified version of the original Rat Scanner that was designed for [Escape from Tarkov][escape-from-tarkov].
 
-**Note:** This version uses **hardcoded item data** from [MetaForge][metaforge-items], as Arc Raiders does not have a live market or API. No live API calls are made.
+**Note:** This version uses item data from the [RaidTheory/arcraiders-data][raidtheory-data] repository, which provides comprehensive and regularly updated game data including items, trades, skill trees, and hideout modules.
 
 [Tutorial / Demo Video][demo-video] - [Frequently asked Questions][faq-page]
 
@@ -36,14 +36,47 @@ While the game developers do not support nor are affiliated with this project, t
 
 Rat Scanner allows you to scan items in the game and provides you with data about items (static item values, value per slot, and **recycle recommendations**).
 
-**Note:** Unlike the original Tarkov version, Arc Raiders does not have a live market or flea market. All item values are **hardcoded** based on data from [MetaForge][metaforge-items]. There are no live API calls.
+**Note:** Unlike the original Tarkov version, Arc Raiders does not have a live market or flea market. All item values are based on static game data from the [RaidTheory/arcraiders-data][raidtheory-data] repository, which is automatically updated.
 
 ### Arc Raiders Features
-- **Recycle Recommendations**: Automatically suggests whether to recycle or keep an item based on:
+
+#### Smart Item Recommendations
+- **Player State Aware**: Recommendations factor in YOUR active quests, learned blueprints, and tracked resources
+- **Priority Markers**: ★ indicates items you're tracking or need for quests/projects
+- **Recycle Logic**: Automatically suggests whether to recycle or keep based on:
+  - Your active quests and their requirements
+  - Learned blueprints and craftable items
+  - Workbench levels and upgrade paths
   - Item value per inventory slot
-  - Quest requirements
-  - Base building requirements
-  - Static item values (no market prices)
+  - Crafting usage and recipes
+
+#### Quest & Progress Tracking
+- **Quest Manager**: Track 100+ quests with objectives and rewards
+- **Active Quest Display**: See your current quests in a persistent overlay
+- **Quest Browser**: Browse and activate quests filtered by trader
+- **Automatic Detection**: Screen capture detects quest menu (framework ready)
+
+#### Workbench & Blueprint System
+- **Level Tracking**: Manage levels for all 9 hideout modules
+- **Blueprint Library**: Track learned projects and their requirements
+- **Upgrade Requirements**: See exactly what you need for next level
+- **Crafting Intelligence**: Know which items you can actually craft
+
+#### Map & Minimap Overlays
+- **Always-Visible Minimap**: Real-time position tracking in top-right corner
+- **Loot Indicators**: Nearby items with rarity color-coding
+- **Interactive Full Map**: Zoomable map with loot spawns and quest markers
+- **Position Tracking**: Player location with pulsing marker (📍)
+
+#### Comprehensive Data
+Powered by the [RaidTheory/arcraiders-data][raidtheory-data] repository:
+- 500+ items with detailed information
+- 100+ quests from all traders
+- Trader exchange data for all NPCs
+- Skill tree with 50+ nodes
+- Hideout module upgrade paths
+- 5 maps with event schedules
+- AI-upscaled item images from arctracker.io
 
 <br/>
 
@@ -145,6 +178,7 @@ This will help to finance the ongoing development of the Arc Raiders adaptation.
 [![PayPal](https://img.shields.io/static/v1?&label=PayPal&message=Donate&color=0079C1&style=for-the-badge&logo=paypal)](https://paypal.me/MoritzScheve)
 
 [arc-raiders]: https://arcraiders.com/
+[raidtheory-data]: https://github.com/RaidTheory/arcraiders-data
 [metaforge-items]: https://metaforge.app/arc-raiders/database/items/page/1
 [escape-from-tarkov]: https://www.escapefromtarkov.com/
 [tarkov-dev]: https://tarkov.dev/

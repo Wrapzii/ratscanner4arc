@@ -31,6 +31,8 @@ public class RatScannerMain : INotifyPropertyChanged {
 	private static readonly HttpClient IconHttpClient = new();
 
 	internal readonly HotkeyManager HotkeyManager;
+	private readonly StateDetectionManager _stateDetectionManager;
+    public StateDetectionManager StateDetectionManager => _stateDetectionManager;
 
 	private Timer? _marketDBRefreshTimer;
 	private Timer? _scanRefreshTimer;
@@ -93,6 +95,8 @@ public class RatScannerMain : INotifyPropertyChanged {
 
 		Logger.LogInfo("Initializing RatEye...");
 		SetupRatEye();
+		_stateDetectionManager = new StateDetectionManager();
+		_stateDetectionManager.SetAutoMapCaptureEnabled(RatConfig.Map.AutoMapCapture);
 
 		new Thread(() => {
 			Thread.Sleep(1000);
@@ -105,6 +109,9 @@ public class RatScannerMain : INotifyPropertyChanged {
 
 			Logger.LogInfo("Enabling hotkeys...");
 			HotkeyManager.RegisterHotkeys();
+
+			Logger.LogInfo("Starting state detection...");
+			_stateDetectionManager.Start();
 
 			Logger.LogInfo("Ready!");
 		}).Start();

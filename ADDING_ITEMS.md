@@ -1,47 +1,85 @@
 # Adding Arc Raiders Items
 
-This document explains how to add new items to the hardcoded Arc Raiders database.
+This document explains how the Arc Raiders item database works and how items are managed.
 
 ## Data Source
 
-All item data should be sourced from: https://metaforge.app/arc-raiders/database/items/page/1
+**Primary Source:** [RaidTheory/arcraiders-data](https://github.com/RaidTheory/arcraiders-data)
 
-## How to Add Items
+This comprehensive GitHub repository is automatically synced and provides:
+- 500+ items with detailed information
+- Trader exchange data
+- Skill tree nodes
+- Hideout module upgrade paths
+- AI-upscaled item images
 
-Items are defined in `RatScanner/ArcRaidersData.cs` in the `Items` list.
+**Fallback Source:** Legacy JSON file (`Resources/ArcRaidersItems.json`)
 
-### Item Structure
+The tool will automatically download and cache data from the RaidTheory repository on first launch. Data is refreshed automatically every 24 hours.
 
-```csharp
-new ArcItem {
-    Id = "arc_item_XXX",           // Unique identifier
-    Name = "Full Item Name",        // Display name
-    ShortName = "Short",            // Abbreviated name
-    Width = 1,                      // Inventory width in slots
-    Height = 1,                     // Inventory height in slots
-    Value = 100,                    // Static value in credits
-    IsQuestItem = false,            // True if needed for quests
-    IsBaseItem = false,             // True if needed for base building
-    Category = "CategoryName",      // Item category
-    ImageLink = null,               // Optional: URL to item icon
-    WikiLink = null                 // Optional: URL to wiki page
+## How Items are Loaded
+
+Items are now loaded from the RaidTheory repository which provides individual JSON files for each item in the `items/` directory. The data structure includes:
+
+```json
+{
+  "id": "item_id",
+  "name": {
+    "en": "Item Name"
+  },
+  "type": "Category",
+  "rarity": "Common",
+  "value": 100,
+  "weightKg": 0.5,
+  "stackSize": 1,
+  "recyclesInto": {
+    "material_1": 2,
+    "material_2": 1
+  },
+  "imageFilename": "https://cdn.arctracker.io/items/item_id.png"
 }
 ```
 
-### Example
+## Manual Data Management
 
+### Updating Item Data
+
+To force a refresh of the RaidTheory data:
+1. Call `ArcRaidersData.RefreshRaidTheoryDataAsync()` from code
+2. Or delete the cache directory at: `%TEMP%/RatScanner/Cache/RaidTheoryData`
+3. Restart the application
+
+### Override Files
+
+You can still use local override files in the `Resources/` directory:
+- `ArcRaidersRecycleValues.json` - Override recycle values
+- `ArcRaidersRecycleOutputs.json` - Override recycle outputs
+- `ArcRaidersCraftingKeep.json` - Mark items for crafting
+- `ArcRaidersCraftingUsage.json` - Define crafting usage counts
+- `ArcRaidersCraftingWeights.json` - Adjust scoring weights
+
+These override files take precedence over the RaidTheory data.
+
+## Accessing Additional Data
+
+The RaidTheory repository provides more than just items:
+
+### Trades
 ```csharp
-new ArcItem {
-    Id = "arc_item_006",
-    Name = "Advanced Polymer",
-    ShortName = "Polymer",
-    Width = 1,
-    Height = 2,
-    Value = 450,
-    IsQuestItem = true,
-    IsBaseItem = true,
-    Category = "Materials"
-}
+var trades = ArcRaidersData.GetTrades();
+var celesteTrades = ArcRaidersData.GetTradesByTrader("Celeste");
+```
+
+### Skill Nodes
+```csharp
+var skillNodes = ArcRaidersData.GetSkillNodes();
+var combatSkills = ArcRaidersData.GetSkillNodesByCategory("COMBAT");
+```
+
+### Hideout Modules
+```csharp
+var hideoutModules = ArcRaidersData.GetHideoutModules();
+var stash = ArcRaidersData.GetHideoutModuleById("stash");
 ```
 
 ## Recycle Logic
@@ -50,38 +88,47 @@ Items are evaluated for recycling based on:
 
 1. **Quest Items** (`IsQuestItem = true`) - Never recycle
 2. **Base Items** (`IsBaseItem = true`) - Never recycle  
-3. **Value per slot** - If less than 50 credits/slot → recycle
-4. **Total value** - If more than 200 credits → keep
-5. **Default** - Recycle
+3. **Crafting Items** (`IsCraftingItem = true`) - Weighted based on usage
+4. **Value per slot** - If less than 50 credits/slot → recycle
+5. **Total value** - If more than 200 credits → keep
+6. **Default** - Recycle
 
 To adjust these thresholds, edit `RatScanner/ArcItemExtensions.cs` in the `GetRecycleRecommendation()` method.
 
-## Categories
+Crafting weights can be configured in `Resources/ArcRaidersCraftingWeights.json`.
 
-Common categories include:
-- Materials
-- Electronics
-- Medical
-- Weapons
-- Junk
-- Food
-- Tools
-- Consumables
+## Contributing to RaidTheory Data
 
-Feel free to add new categories as needed for Arc Raiders items.
+If you find errors or want to add missing data, contribute directly to the upstream repository:
+
+**Repository:** https://github.com/RaidTheory/arcraiders-data
+
+1. Fork the repository
+2. Make your changes
+3. Format with `bun run format`
+4. Submit a pull request
+
+Your changes will be automatically picked up by Rat Scanner on the next data refresh.
 
 ## Testing
 
-After adding items:
-1. Build the project
-2. Launch the scanner
-3. Scan items to verify they appear correctly
-4. Check that recycle recommendations work as expected
+After making changes:
+1. Delete the cache directory to force re-download: `%TEMP%/RatScanner/Cache/RaidTheoryData`
+2. Build the project
+3. Launch the scanner
+4. Verify items load correctly
+5. Check that recycle recommendations work as expected
 
-## Future Improvements
+## Data Structure Reference
 
-Consider:
-- Extracting items to a JSON file for easier editing
-- Creating a tool to import from MetaForge API
-- Adding rarity/tier information
-- Supporting item variants
+### Item Properties (from RaidTheory)
+- `id` - Unique item identifier (kebab-case)
+- `name` - Localized names (multiple languages)
+- `type` - Item category
+- `rarity` - Common, Uncommon, Rare, Epic, Legendary
+- `value` - Base credit value
+- `weightKg` - Weight in kilograms
+- `stackSize` - Maximum stack size
+- `recyclesInto` - Dictionary of output items and quantities
+- `salvagesInto` - Salvage outputs
+- `imageFilename` - URL to item icon (arctracker.io CDN)

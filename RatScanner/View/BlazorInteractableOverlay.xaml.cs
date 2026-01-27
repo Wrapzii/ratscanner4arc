@@ -33,6 +33,12 @@ public partial class BlazorInteractableOverlay : Window {
 	private void SetPosition() {
 		System.Collections.Generic.IEnumerable<Screen> hoveredScreen = Screen.AllScreens.Where(screen => screen.Bounds.Contains(UserActivityHelper.GetMousePosition()));
 		Screen? screen = hoveredScreen.FirstOrDefault() ?? Screen.PrimaryScreen;
+		if (screen == null) {
+			System.Drawing.Rectangle bFallback = SystemInformation.VirtualScreen;
+			nint handleFallback = new WindowInteropHelper(this).Handle;
+			NativeMethods.SetWindowPos(handleFallback, 0, bFallback.Left, bFallback.Top, bFallback.Right - bFallback.Left, bFallback.Bottom - bFallback.Top, 0);
+			return;
+		}
 		System.Drawing.Rectangle b = screen.Bounds;
 		nint handle = new WindowInteropHelper(this).Handle;
 		NativeMethods.SetWindowPos(handle, 0, b.Left, b.Top, b.Right - b.Left, b.Bottom - b.Top, 0);
@@ -59,9 +65,14 @@ public partial class BlazorInteractableOverlay : Window {
 	private void SetWindowStyle() {
 		const int gwlExStyle = -20; // GWL_EXSTYLE
 		const uint wsExToolWindow = 0x00000080; // WS_EX_TOOLWINDOW
+		const uint wdaExcludeFromCapture = 0x00000011; // WDA_EXCLUDEFROMCAPTURE
 
 		nint handle = new WindowInteropHelper(this).Handle;
 		NativeMethods.SetWindowLongPtr(handle, gwlExStyle, NativeMethods.GetWindowLongPtr(handle, gwlExStyle) | (nint)wsExToolWindow);
+		// Prevent overlay from appearing in screen capture
+		if (!NativeMethods.SetWindowDisplayAffinity(handle, wdaExcludeFromCapture)) {
+			RatScanner.Logger.LogWarning($"Failed to exclude interactable overlay from capture (error {Marshal.GetLastWin32Error()})");
+		}
 	}
 
 	private void WebView_Loaded(object? sender, CoreWebView2NavigationCompletedEventArgs e) {
@@ -83,6 +94,9 @@ public partial class BlazorInteractableOverlay : Window {
 
 		[DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
 		public static extern nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong);
+
+		[DllImport("user32.dll", SetLastError = true)]
+		public static extern bool SetWindowDisplayAffinity(nint hWnd, uint dwAffinity);
 
 		[DllImport("user32.dll", SetLastError = true)]
 		public static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);

@@ -20,6 +20,9 @@ public static class ArcRaidersData {
 	private static readonly object RecycleFetchLock = new();
 	private static readonly HashSet<string> PendingRecycleOutputFetches = new(StringComparer.OrdinalIgnoreCase);
 	private static CraftingWeightsConfig? CraftingWeights;
+	private static readonly object RaidTheoryCacheLock = new();
+	private static List<RaidTheoryDataSource.RaidTheoryProject>? CachedProjects;
+	private static bool LoggedProjectsUnavailable;
 	
 	/// <summary>
 	/// Simplified item class for Arc Raiders with hardcoded values
@@ -63,8 +66,9 @@ public static class ArcRaidersData {
 	}
 	
 	/// <summary>
-	/// Hardcoded Arc Raiders items database loaded from a generated JSON file.
-	/// Run Tools/ArcRaidersItemsScraper.ps1 to refresh the data.
+	/// Hardcoded Arc Raiders items database loaded from RaidTheory repository or fallback to legacy JSON.
+	/// Primary source: https://github.com/RaidTheory/arcraiders-data
+	/// Fallback: Resources/ArcRaidersItems.json
 	/// </summary>
 	private static readonly Lazy<List<ArcItem>> Items = new(LoadItems);
 	private static readonly HttpClient MetaforgeClient = new();
@@ -72,28 +76,134 @@ public static class ArcRaidersData {
 
 	private static List<ArcItem> LoadItems() {
 		try {
+			// Try to load from RaidTheory data first
+			if (RaidTheoryDataSource.IsDataAvailable()) {
+				Logger.LogInfo("Loading items from RaidTheory data repository...");
+				var items = LoadItemsFromRaidTheory();
+				if (items.Count > 0) {
+					Logger.LogInfo($"Successfully loaded {items.Count} items from RaidTheory data");
+					ApplyRecycleValueOverrides(items);
+					ApplyRecycleOutputOverrides(items);
+					ApplyCraftingUsageOverrides(items);
+					ApplyCraftingKeepOverrides(items);
+					EnsureOverrideWatchers();
+					
+					// Start async data download in background if needed
+					_ = Task.Run(async () => {
+						try {
+							await RaidTheoryDataSource.EnsureDataAsync().ConfigureAwait(false);
+						} catch (Exception ex) {
+							Logger.LogDebug($"Background data refresh failed: {ex.Message}");
+						}
+					});
+					
+					return items;
+				}
+			}
+			
+			// Fallback to legacy JSON file
+			Logger.LogInfo("Loading items from legacy JSON file...");
 			string dataPath = GetDataPath();
 			if (!File.Exists(dataPath)) {
+				Logger.LogWarning("No data source available, attempting to download RaidTheory data...");
+				// Try to download data synchronously as last resort
+				try {
+					var downloadTask = RaidTheoryDataSource.DownloadDataAsync();
+					// Use GetAwaiter().GetResult() to avoid potential deadlock
+					bool success = downloadTask.GetAwaiter().GetResult();
+					if (success && RaidTheoryDataSource.IsDataAvailable()) {
+						var items = LoadItemsFromRaidTheory();
+						if (items.Count > 0) {
+							ApplyRecycleValueOverrides(items);
+							ApplyRecycleOutputOverrides(items);
+							ApplyCraftingUsageOverrides(items);
+							ApplyCraftingKeepOverrides(items);
+							EnsureOverrideWatchers();
+							return items;
+						}
+					}
+				} catch (Exception downloadEx) {
+					Logger.LogWarning($"Failed to download RaidTheory data: {downloadEx.Message}");
+				}
 				return new List<ArcItem>();
 			}
 
 			string json = File.ReadAllText(dataPath);
-			var items = JsonSerializer.Deserialize<List<ArcItem>>(json, new JsonSerializerOptions {
+			var legacyItems = JsonSerializer.Deserialize<List<ArcItem>>(json, new JsonSerializerOptions {
 				PropertyNameCaseInsensitive = true
 			});
 			
-			if (items == null) return new List<ArcItem>();
+			if (legacyItems == null) return new List<ArcItem>();
 
-			ApplyRecycleValueOverrides(items);
-			ApplyRecycleOutputOverrides(items);
-			ApplyCraftingUsageOverrides(items);
-			ApplyCraftingKeepOverrides(items);
-			EnsureAuxData(items);
+			ApplyRecycleValueOverrides(legacyItems);
+			ApplyRecycleOutputOverrides(legacyItems);
+			ApplyCraftingUsageOverrides(legacyItems);
+			ApplyCraftingKeepOverrides(legacyItems);
+			EnsureAuxData(legacyItems);
 			EnsureOverrideWatchers();
-			return items;
-		} catch {
+			
+			// Start async data download in background for future use
+			_ = Task.Run(async () => {
+				try {
+					await RaidTheoryDataSource.EnsureDataAsync().ConfigureAwait(false);
+				} catch (Exception ex) {
+					Logger.LogDebug($"Background data refresh failed: {ex.Message}");
+				}
+			});
+			
+			return legacyItems;
+		} catch (Exception ex) {
+			Logger.LogError($"Failed to load items: {ex.Message}");
 			return new List<ArcItem>();
 		}
+	}
+	
+	private static List<ArcItem> LoadItemsFromRaidTheory() {
+		var raidTheoryItems = RaidTheoryDataSource.LoadItems();
+		var items = new List<ArcItem>();
+		
+		// Build a value map for calculating recycle values
+		var itemValueMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		foreach (var rtItem in raidTheoryItems) {
+			itemValueMap[rtItem.Id] = rtItem.Value;
+		}
+		
+		// Convert RaidTheory items to ArcItem format
+		foreach (var rtItem in raidTheoryItems) {
+			var item = new ArcItem {
+				Id = rtItem.Id,
+				Name = rtItem.GetName(),
+				ShortName = rtItem.GetName(),
+				Width = 1, // Default, RaidTheory doesn't specify size
+				Height = 1,
+				Value = rtItem.Value,
+				RecycleValue = rtItem.CalculateRecycleValue(itemValueMap),
+				IsQuestItem = false, // Will be determined by other means
+				IsBaseItem = false,
+				IsRecyclable = rtItem.RecyclesInto != null && rtItem.RecyclesInto.Count > 0,
+				IsCraftingItem = false,
+				Rarity = rtItem.Rarity,
+				Weight = rtItem.WeightKg,
+				ImageLink = rtItem.ImageFilename,
+				WikiLink = null, // RaidTheory doesn't include wiki links
+				Category = rtItem.Type
+			};
+			
+			// Convert recycles into to RecycleOutput format
+			if (rtItem.RecyclesInto != null) {
+				foreach (var (itemId, quantity) in rtItem.RecyclesInto) {
+					item.RecycleOutputs.Add(new RecycleOutput {
+						Id = itemId,
+						Name = raidTheoryItems.FirstOrDefault(i => i.Id == itemId)?.GetName(),
+						Quantity = quantity
+					});
+				}
+			}
+			
+			items.Add(item);
+		}
+		
+		return items;
 	}
 
 	private static string GetDataPath() => Path.Combine(AppContext.BaseDirectory, "Resources", "ArcRaidersItems.json");
@@ -672,4 +782,158 @@ public static class ArcRaidersData {
 	/// Get all base building items
 	/// </summary>
 	public static ArcItem[] GetBaseItems() => Items.Value.Where(i => i.IsBaseItem).ToArray();
+	
+	/// <summary>
+	/// Get all trades from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheoryTrade> GetTrades() {
+		if (!RaidTheoryDataSource.IsDataAvailable()) {
+			Logger.LogWarning("RaidTheory data not available for trades");
+			return new List<RaidTheoryDataSource.RaidTheoryTrade>();
+		}
+		return RaidTheoryDataSource.LoadTrades();
+	}
+	
+	/// <summary>
+	/// Get all skill nodes from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheorySkillNode> GetSkillNodes() {
+		if (!RaidTheoryDataSource.IsDataAvailable()) {
+			Logger.LogWarning("RaidTheory data not available for skill nodes");
+			return new List<RaidTheoryDataSource.RaidTheorySkillNode>();
+		}
+		return RaidTheoryDataSource.LoadSkillNodes();
+	}
+	
+	/// <summary>
+	/// Get trades for a specific trader
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheoryTrade> GetTradesByTrader(string traderName) {
+		return GetTrades().Where(t => t.Trader.Equals(traderName, StringComparison.OrdinalIgnoreCase)).ToList();
+	}
+	
+	/// <summary>
+	/// Get skill nodes by category
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheorySkillNode> GetSkillNodesByCategory(string category) {
+		return GetSkillNodes().Where(s => s.Category.Equals(category, StringComparison.OrdinalIgnoreCase)).ToList();
+	}
+	
+	/// <summary>
+	/// Get all hideout modules from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheoryHideoutModule> GetHideoutModules() {
+		if (!RaidTheoryDataSource.IsDataAvailable()) {
+			Logger.LogWarning("RaidTheory data not available for hideout modules");
+			return new List<RaidTheoryDataSource.RaidTheoryHideoutModule>();
+		}
+		return RaidTheoryDataSource.LoadHideoutModules();
+	}
+	
+	/// <summary>
+	/// Get hideout module by ID
+	/// </summary>
+	public static RaidTheoryDataSource.RaidTheoryHideoutModule? GetHideoutModuleById(string id) {
+		return GetHideoutModules().FirstOrDefault(h => h.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+	}
+	
+	private static List<RaidTheoryDataSource.RaidTheoryQuest>? _cachedQuests;
+
+	/// <summary>
+	/// Get all quests from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheoryQuest> GetQuests() {
+		if (_cachedQuests != null) return _cachedQuests;
+
+		if (!RaidTheoryDataSource.IsDataAvailable()) {
+			Logger.LogWarning("RaidTheory data not available for quests");
+			return new List<RaidTheoryDataSource.RaidTheoryQuest>();
+		}
+		_cachedQuests = RaidTheoryDataSource.LoadQuests();
+		return _cachedQuests;
+	}
+	
+	/// <summary>
+	/// Get quest by ID
+	/// </summary>
+	public static RaidTheoryDataSource.RaidTheoryQuest? GetQuestById(string id) {
+		return GetQuests().FirstOrDefault(q => q.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+	}
+	
+	/// <summary>
+	/// Get quests by trader
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheoryQuest> GetQuestsByTrader(string traderName) {
+		return GetQuests().Where(q => q.Trader.Equals(traderName, StringComparison.OrdinalIgnoreCase)).ToList();
+	}
+	
+	/// <summary>
+	/// Get all projects (blueprints) from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheoryProject> GetProjects() {
+		var cached = CachedProjects;
+		if (cached != null) return cached;
+		if (!RaidTheoryDataSource.IsDataAvailable()) {
+			if (!LoggedProjectsUnavailable) {
+				Logger.LogWarning("RaidTheory data not available for projects");
+				LoggedProjectsUnavailable = true;
+			}
+			return new List<RaidTheoryDataSource.RaidTheoryProject>();
+		}
+
+		lock (RaidTheoryCacheLock) {
+			if (CachedProjects != null) return CachedProjects;
+			var projects = RaidTheoryDataSource.LoadProjects();
+			CachedProjects = projects;
+			LoggedProjectsUnavailable = false;
+			return projects;
+		}
+	}
+	
+	/// <summary>
+	/// Get project by ID
+	/// </summary>
+	public static RaidTheoryDataSource.RaidTheoryProject? GetProjectById(string id) {
+		return GetProjects().FirstOrDefault(p => p.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+	}
+	
+	private static List<RaidTheoryDataSource.RaidTheoryMap>? _cachedMaps;
+
+	/// <summary>
+	/// Get all maps from RaidTheory data
+	/// </summary>
+	public static List<RaidTheoryDataSource.RaidTheoryMap> GetMaps() {
+		if (_cachedMaps != null) return _cachedMaps;
+
+		if (!RaidTheoryDataSource.IsDataAvailable()) {
+			Logger.LogWarning("RaidTheory data not available for maps");
+			return new List<RaidTheoryDataSource.RaidTheoryMap>();
+		}
+		_cachedMaps = RaidTheoryDataSource.LoadMaps();
+		return _cachedMaps;
+	}
+	
+	/// <summary>
+	/// Get map by ID
+	/// </summary>
+	public static RaidTheoryDataSource.RaidTheoryMap? GetMapById(string id) {
+		return GetMaps().FirstOrDefault(m => m.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+	}
+	
+	/// <summary>
+	/// Force refresh RaidTheory data from repository
+	/// </summary>
+	public static async Task<bool> RefreshRaidTheoryDataAsync() {
+		bool success = await RaidTheoryDataSource.DownloadDataAsync().ConfigureAwait(false);
+		if (success) {
+			// Trigger reload by clearing the lazy value
+			// Note: This requires restarting the application for full effect
+			lock (RaidTheoryCacheLock) {
+				CachedProjects = null;
+			}
+			Logger.LogInfo("RaidTheory data refreshed. Restart application to load new data.");
+			AuxDataUpdated?.Invoke();
+		}
+		return success;
+	}
 }

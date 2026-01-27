@@ -1,0 +1,375 @@
+@using RatScanner
+@using System.Windows.Forms
+@inject IJSRuntime JS
+@inject RatScannerMain RatScanner
+@inject RatScanner.VirtualScreenOffset VirtualScreenOffset
+@implements IDisposable
+
+<div class="minimap-container @(IsVisible ? "visible" : "hidden")" style="@ContainerStyle">
+    @if (IsInRaid && MinimapData != null)
+    {
+        <div class="minimap">
+            <div class="minimap-header">
+                <span class="map-name">@MinimapData.MapName</span>
+            </div>
+            
+            <div class="minimap-display">
+                <div class="minimap-map-layer" style="@MinimapLayerStyle background-image: url('@MinimapData.MapImageUrl');">
+                    <!-- Player marker fixed at center -->
+                    <div class="player-marker-center"></div>
+				
+                    @foreach (var loot in MinimapData.NearbyLoot)
+                    {
+                        <div class="loot-marker @GetRarityClass(loot.Rarity)"
+                             style="left: @(loot.X)%; top: @(loot.Y)%;"
+                             title="@loot.ItemType">
+                            ⭐
+                        </div>
+                    }
+                </div>
+            </div>
+            
+            @* Quest List Below Map *@
+            @if (MinimapData.ActiveQuests.Any())
+            {
+                <div class="quest-list">
+                    <div class="quest-list-header">Active Quests</div>
+                    @foreach (var quest in MinimapData.ActiveQuests.Take(4))
+                    {
+                        <div class="quest-item">
+                            <span class="quest-name">@quest.QuestName</span>
+                            @if (quest.Objectives.Any())
+                            {
+                                @foreach (var obj in quest.Objectives.Take(2))
+                                {
+                                    <div class="quest-objective @(obj.IsCompleted ? "completed" : "")">
+                                        @(obj.IsCompleted ? "✓" : "○") @obj.Description
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            
+            @if (MinimapData.NearbyLoot.Any())
+            {
+                <div class="nearby-loot-list">
+                    <div class="list-header">Nearby Loot:</div>
+                    @foreach (var loot in MinimapData.NearbyLoot.Take(5))
+                    {
+                        <div class="loot-item @GetRarityClass(loot.Rarity)">
+                            • @loot.ItemType
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+    else if (!IsInRaid)
+    {
+        <div class="minimap">
+            <div class="minimap-header">
+                <span class="map-name">Main Menu</span>
+            </div>
+            <div class="quest-list">
+                <div class="quest-list-header">Active Quests</div>
+                @foreach (var quest in GetActiveQuestSummaries().Take(6))
+                {
+                    <div class="quest-item">
+                        <span class="quest-name">@quest</span>
+                    </div>
+                }
+                @if (!GetActiveQuestSummaries().Any())
+                {
+                    <div class="quest-item">
+                        <span class="quest-name">No active quests</span>
+                    </div>
+                }
+            </div>
+            <div class="nearby-loot-list">
+                <div class="list-header">Craftables known:</div>
+                <div class="loot-item">@GetCraftableCount() items</div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="minimap-disabled">
+            <p>Position Unknown</p>
+            <small>Auto-detecting map…</small>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; } = true;
+    
+    private MapOverlayManager.MinimapData? MinimapData;
+    private bool IsInRaid = true;
+    private double MinimapZoom = 2.5; // More reasonable zoom level
+    private string MinimapLayerStyle = "";
+    private System.Threading.Timer? _refreshTimer;
+
+    // Position
+    private string ContainerStyle = "";
+    
+    private readonly MapOverlayManager _mapManager = MapOverlayManager.Instance;
+    
+    protected override void OnInitialized()
+    {
+        UpdatePosition();
+        RefreshMinimap();
+        
+        _refreshTimer = new System.Threading.Timer(_ => {
+            InvokeAsync(() => {
+                RefreshMinimap();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+        _refreshTimer = null;
+    }
+
+    private void UpdatePosition()
+    {
+        try
+        {
+            var screen = Screen.PrimaryScreen;
+            if (screen == null)
+            {
+                ContainerStyle = "right: 20px; top: 20px;";
+                return;
+            }
+            // Place top right of primary screen
+            var width = 250; 
+            var left = screen.Bounds.Right - VirtualScreenOffset.XOffset - width - 40; 
+            var top = screen.Bounds.Top - VirtualScreenOffset.YOffset + 20;
+            
+            ContainerStyle = $"left: {left}px; top: {top}px;";
+        }
+        catch (Exception)
+        {
+            // Fallback
+            ContainerStyle = "right: 20px; top: 20px;";
+        }
+    }
+    
+    private void RefreshMinimap()
+    {
+        MinimapData = _mapManager.GenerateMinimapData();
+        IsInRaid = _mapManager.IsInRaid;
+        UpdateMinimapLayerStyle();
+    }
+    
+    private void UpdateMinimapLayerStyle()
+    {
+        if (MinimapData == null)
+        {
+            MinimapLayerStyle = $"transform: scale({MinimapZoom.ToString(System.Globalization.CultureInfo.InvariantCulture)}); ";
+            return;
+        }
+
+        // Center the map on the detected player position
+        // With transform-origin: 0 0 and scale(zoom), a point at X%, Y% ends up at X*zoom%, Y*zoom%
+        // To center: we need left offset = 50% - X*zoom%, same for Y
+        string zoom = MinimapZoom.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        
+        double offsetX = 50 - (MinimapData.PlayerX * MinimapZoom);
+        double offsetY = 50 - (MinimapData.PlayerY * MinimapZoom);
+        string offX = offsetX.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string offY = offsetY.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        
+        MinimapLayerStyle = $"transform-origin: 0 0; transform: scale({zoom}); left: {offX}%; top: {offY}%; ";
+    }
+    
+    private string GetRarityClass(string rarity)
+    {
+        return rarity.ToLower() switch
+        {
+            "legendary" => "rarity-legendary",
+            "epic" => "rarity-epic",
+            "rare" => "rarity-rare",
+            "uncommon" => "rarity-uncommon",
+            _ => "rarity-common"
+        };
+    }
+
+    private IEnumerable<string> GetActiveQuestSummaries()
+    {
+        var state = PlayerStateManager.GetState();
+        foreach (var questId in state.ActiveQuests)
+        {
+            var quest = ArcRaidersData.GetQuestById(questId);
+            if (quest != null)
+            {
+                yield return quest.GetName();
+            }
+        }
+    }
+
+    private int GetCraftableCount()
+    {
+        return PlayerStateManager.GetCraftableItems().Count;
+    }
+}
+
+<style>
+    .minimap-container {
+        position: fixed;
+        z-index: 900;
+        transition: opacity 0.3s;
+        pointer-events: none;
+    }
+    
+    .minimap-container.hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+    
+    .minimap {
+        background: rgba(20, 20, 30, 0.95);
+        border: 2px solid #4a9eff;
+        border-radius: 8px;
+        padding: 10px;
+        width: 250px;
+    }
+    
+    .minimap-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        color: #4a9eff;
+        font-weight: bold;
+    }
+    
+    
+    .minimap-display {
+        width: 100%;
+        height: 230px;
+        border-radius: 6px;
+        position: relative;
+        border: 1px solid #555;
+        overflow: hidden;
+        background: #0e0e12;
+    }
+
+    .minimap-map-layer {
+        position: absolute;
+        inset: 0;
+        background-size: 100% 100%;
+        background-repeat: no-repeat;
+        background-position: center;
+        transform-origin: top left;
+    }
+    
+    .player-marker-center {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 8px;
+        height: 8px;
+        background: #4FC3F7;
+        border: 2px solid #FFF;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 0 6px rgba(79, 195, 247, 0.8);
+        z-index: 100;
+    }
+    
+    @@keyframes pulse {
+        0%, 100% { transform: translate(-50%, -50%) scale(1); }
+        50% { transform: translate(-50%, -50%) scale(1.2); }
+    }
+    
+    .loot-marker {
+        position: absolute;
+        font-size: 12px;
+        transform: translate(-50%, -50%);
+        cursor: pointer;
+    }
+    
+    .loot-marker.rarity-legendary { color: #ff8c00; filter: drop-shadow(0 0 2px #ff8c00); }
+    .loot-marker.rarity-epic { color: #a335ee; filter: drop-shadow(0 0 2px #a335ee); }
+    .loot-marker.rarity-rare { color: #0070dd; filter: drop-shadow(0 0 2px #0070dd); }
+    .loot-marker.rarity-uncommon { color: #1eff00; filter: drop-shadow(0 0 2px #1eff00); }
+    .loot-marker.rarity-common { color: #fff; }
+    
+    .nearby-loot-list {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #555;
+        font-size: 0.85em;
+        color: #ccc;
+    }
+    
+    .list-header {
+        color: #4a9eff;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .loot-item {
+        margin: 2px 0;
+        padding: 2px;
+    }
+    
+    .quest-list {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #555;
+        font-size: 0.85em;
+        color: #ccc;
+        max-height: 150px;
+        overflow-y: auto;
+    }
+    
+    .quest-list-header {
+        color: #ffc107;
+        font-weight: bold;
+        margin-bottom: 6px;
+        font-size: 0.9em;
+    }
+    
+    .quest-item {
+        margin-bottom: 8px;
+        padding: 4px 6px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+        border-left: 2px solid #ffc107;
+    }
+    
+    .quest-name {
+        font-weight: bold;
+        color: #fff;
+        display: block;
+        margin-bottom: 2px;
+    }
+    
+    .quest-objective {
+        font-size: 0.85em;
+        color: #aaa;
+        margin-left: 8px;
+    }
+    
+    .quest-objective.completed {
+        color: #4caf50;
+        text-decoration: line-through;
+    }
+    
+    .minimap-disabled {
+        background: rgba(20, 20, 30, 0.95);
+        border: 2px solid #666;
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        color: #999;
+    }
+    
+</style>
